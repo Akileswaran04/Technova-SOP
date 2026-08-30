@@ -2,7 +2,9 @@
 import logging
 from typing import Optional
 
-from motor.motor_asyncio import AsyncClient, AsyncDatabase
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+AsyncClient = AsyncIOMotorClient
+AsyncDatabase = AsyncIOMotorDatabase
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
@@ -12,7 +14,7 @@ logger = logging.getLogger(__name__)
 class MongoDBSettings(BaseSettings):
     """MongoDB configuration."""
 
-    model_config = ConfigDict(env_prefix="mongodb_", case_sensitive=False)
+    model_config = ConfigDict(env_prefix="mongodb_", case_sensitive=False, env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     uri: str
     db: str = "technova"

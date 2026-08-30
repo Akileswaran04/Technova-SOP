@@ -1,32 +1,19 @@
 /**
- * Login / Signup screen — mocked local-only auth.
- * 
- * IMPORTANT: Passwords are stored in plaintext in localStorage.
- * TODO: Replace with real auth (bcrypt hashing, JWT tokens, server-side sessions).
- * The login ID is a simple hash of email/phone to identify the seller.
+ * Login / Signup screen — API-backed auth with JWT tokens.
  */
 import { useState } from 'react';
-import { getSellers, createSeller, setSession } from '../services/storage';
+import { registerSeller, loginSeller } from '../services/storage';
 
 export default function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // Simple hash to create a seller ID from the identifier (not secure — demo only)
-  const hashId = (str) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return 'seller_' + Math.abs(hash).toString(36);
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -35,48 +22,45 @@ export default function LoginScreen({ onLogin }) {
       return;
     }
 
-    if (mode === 'signup') {
-      const existing = getSellers().find((s) => s.id === hashId(identifier.trim()));
-      if (existing) {
-        setError('An account with this email/phone already exists. Try logging in.');
-        return;
+    setLoading(true);
+    try {
+      if (mode === 'signup') {
+        if (!fullName.trim()) {
+          setError('Please enter your name');
+          setLoading(false);
+          return;
+        }
+        const result = await registerSeller({
+          email: identifier.includes('@') ? identifier.trim() : `${identifier.trim()}@technova.local`,
+          password: password,
+          full_name: fullName.trim(),
+          phone: identifier.includes('@') ? null : identifier.trim(),
+        });
+        onLogin(result);
+      } else {
+        const result = await loginSeller(identifier.trim(), password);
+        onLogin(result);
       }
-      const seller = createSeller({
-        id: hashId(identifier.trim()),
-        storeName: '',
-        category: '',
-        bio: '',
-        phone: identifier.includes('@') ? '' : identifier.trim(),
-        email: identifier.includes('@') ? identifier.trim() : '',
-        address: '',
-        hours: '',
-        avatarImage: null,
-        documents: [],
-        password: password, // TODO: hash this in production
-        createdAt: new Date().toISOString(),
-      });
-      setSession(seller.id);
-      onLogin(seller);
-    } else {
-      const seller = getSellers().find((s) => s.id === hashId(identifier.trim()));
-      if (!seller) {
-        setError('No account found with this email/phone. Please sign up first.');
-        return;
-      }
-      if (seller.password !== password) {
+    } catch (err) {
+      if (err.status === 404) {
+        setError(mode === 'login'
+          ? 'No account found. Please sign up first.'
+          : 'An account with this email already exists.');
+      } else if (err.status === 409) {
+        setError('An account with this email already exists. Try logging in.');
+      } else if (err.status === 422) {
         setError('Incorrect password. Please try again.');
-        return;
+      } else {
+        setError(err.message || 'Something went wrong. Please try again.');
       }
-      setSession(seller.id);
-      onLogin(seller);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface p-4">
-      {/* Main Authentication Card */}
       <main className="w-full max-w-[440px] bg-surface-container-lowest border border-outline-variant rounded-xl p-6 md:p-8 shadow-sm">
-        {/* Header / Logo Area */}
         <header className="flex flex-col items-center text-center mb-8">
           <div className="w-16 h-16 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center mb-4 shadow-sm">
             <span className="material-symbols-outlined text-[32px]">storefront</span>
@@ -87,7 +71,6 @@ export default function LoginScreen({ onLogin }) {
           </p>
         </header>
 
-        {/* Authentication Form */}
         <form className="space-y-4 w-full" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-error-container text-on-error-container px-4 py-3 rounded-lg text-sm font-medium">
@@ -95,10 +78,26 @@ export default function LoginScreen({ onLogin }) {
             </div>
           )}
 
-          {/* Identifier Input */}
+          {mode === 'signup' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-label-md text-on-surface" htmlFor="fullName">Full Name</label>
+              <div className="relative flex items-center">
+                <span className="material-symbols-outlined absolute left-4 text-on-surface-variant">badge</span>
+                <input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="e.g. Rajesh Kumar"
+                  className="w-full h-12 pl-12 pr-4 rounded-lg border border-outline-variant bg-surface text-on-surface text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1">
             <label className="text-label-md text-on-surface" htmlFor="identifier">
-              Email or Phone Number
+              {mode === 'signup' ? 'Email or Phone' : 'Email or Phone Number'}
             </label>
             <div className="relative flex items-center">
               <span className="material-symbols-outlined absolute left-4 text-on-surface-variant">person</span>
@@ -114,12 +113,9 @@ export default function LoginScreen({ onLogin }) {
             </div>
           </div>
 
-          {/* Password Input */}
           <div className="flex flex-col gap-1">
             <div className="flex justify-between items-center">
-              <label className="text-label-md text-on-surface" htmlFor="password">
-                Password
-              </label>
+              <label className="text-label-md text-on-surface" htmlFor="password">Password</label>
               {mode === 'login' && (
                 <a href="#" className="text-label-sm text-primary hover:text-on-primary-fixed-variant transition-colors">
                   Forgot?
@@ -149,21 +145,24 @@ export default function LoginScreen({ onLogin }) {
             </div>
           </div>
 
-          {/* Privacy Helper Note */}
           <div className="flex items-start gap-2 bg-surface-container p-4 rounded-lg mt-2">
-            <span className="material-symbols-outlined text-primary text-[20px] shrink-0">shield_lock</span>
+            <span className="material-symbols-outlined text-primary text-[20px] shrink-0">cloud</span>
             <p className="text-label-sm text-on-surface-variant pt-[2px]">
-              Your business data is stored securely and processed locally for faster, offline access.
+              Your business data is stored securely in the cloud. Access it from anywhere.
             </p>
           </div>
 
-          {/* Action Buttons */}
           <div className="pt-2 space-y-2 flex flex-col">
             <button
               type="submit"
-              className="w-full h-12 flex items-center justify-center bg-primary hover:bg-on-primary-fixed-variant text-on-primary text-label-md rounded-lg transition-all active:scale-[0.98] shadow-sm"
+              disabled={loading}
+              className="w-full h-12 flex items-center justify-center bg-primary hover:bg-on-primary-fixed-variant disabled:opacity-50 text-on-primary text-label-md rounded-lg transition-all active:scale-[0.98] shadow-sm"
             >
-              {mode === 'login' ? 'Login' : 'Sign Up'}
+              {loading ? (
+                <span className="material-symbols-outlined animate-spin text-[20px]">sync</span>
+              ) : (
+                mode === 'login' ? 'Login' : 'Sign Up'
+              )}
             </button>
 
             <div className="relative flex items-center py-1">

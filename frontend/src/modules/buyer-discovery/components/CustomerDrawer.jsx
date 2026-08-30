@@ -10,9 +10,13 @@ export default function CustomerDrawer({ customer, sellerId: _sellerId, onClose,
   const [notes, setNotes] = useState(customer.notes || '');
   const [editing, setEditing] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (customer.id && !customer.id.startsWith('derived_')) {
-      updateCustomer(customer.id, { contact, notes });
+      try {
+        await updateCustomer(customer.id, { contact, notes });
+      } catch (err) {
+        console.error('Failed to update customer:', err);
+      }
     }
     setEditing(false);
     onUpdate();
@@ -32,7 +36,6 @@ export default function CustomerDrawer({ customer, sellerId: _sellerId, onClose,
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Avatar + Name */}
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center text-headline-md" style={{ fontWeight: 700 }}>
               {customer.name?.charAt(0)?.toUpperCase() || '?'}
@@ -47,7 +50,6 @@ export default function CustomerDrawer({ customer, sellerId: _sellerId, onClose,
             </div>
           </div>
 
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-surface-container-low rounded-xl p-3 text-center">
               <p className="text-headline-md text-primary" style={{ fontWeight: 700 }}>{customer.reviewCount || 0}</p>
@@ -65,7 +67,6 @@ export default function CustomerDrawer({ customer, sellerId: _sellerId, onClose,
             </div>
           </div>
 
-          {/* Editable fields */}
           <div className="space-y-3">
             <div className="flex flex-col gap-1">
               <label className="text-label-md text-on-surface">Contact</label>
@@ -90,7 +91,6 @@ export default function CustomerDrawer({ customer, sellerId: _sellerId, onClose,
             )}
           </div>
 
-          {/* Review History */}
           <div>
             <h4 className="text-headline-md text-on-surface mb-3" style={{ fontWeight: 600 }}>
               Review History ({customer.reviews?.length || 0})

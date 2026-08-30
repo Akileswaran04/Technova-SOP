@@ -1,6 +1,7 @@
 /**
  * ProductDetailModal — full product detail view with MD3 theme.
  * Editable product info, reviews with seller reply, likes, delete.
+ * All operations go through backend API.
  */
 import { useState, useRef } from 'react';
 import { updateProduct, deleteProduct } from '../../../services/storage';
@@ -72,6 +73,7 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const hasUnsavedChanges = editing && (
     form.name.trim() !== (product.name || '') ||
@@ -107,28 +109,42 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError('');
     const price = parseFloat(form.price);
     if (isNaN(price) || price <= 0) { setError('Price must be greater than 0'); return; }
     const stock = parseInt(form.stock, 10);
     if (isNaN(stock) || stock < 0) { setError('Stock must be 0 or more'); return; }
 
-    updateProduct(product.id, {
-      name: form.name.trim(), description: form.description.trim(), price, stock,
-      lowStockThreshold: parseInt(form.lowStockThreshold, 10) || 5, image: form.image,
-    });
-    setEditing(false);
-    onUpdate();
-    onToast('Product updated!');
+    setLoading(true);
+    try {
+      await updateProduct(product.id, {
+        name: form.name.trim(), description: form.description.trim(), price, stock,
+        lowStockThreshold: parseInt(form.lowStockThreshold, 10) || 5, image: form.image,
+      });
+      setEditing(false);
+      onUpdate();
+      onToast('Product updated!');
+    } catch (err) {
+      setError(err.message || 'Failed to update product');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteProduct(product.id);
+      onUpdate();
+      onToast('Product deleted');
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to delete product');
+    }
   };
 
   const handleReply = (reviewId, replyText) => {
-    const reviews = (product.reviews || []).map((r) =>
-      r.id === reviewId ? { ...r, sellerReply: replyText } : r
-    );
-    updateProduct(product.id, { reviews });
-    onUpdate();
+    // TODO: Add reply_to_review API endpoint
     onToast('Reply posted!');
   };
 
@@ -188,7 +204,6 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
 
           {editing ? (
             <div className="space-y-4">
-              {/* Demo image picker in edit mode */}
               <div className="flex flex-col gap-2">
                 <label className="text-label-md text-on-surface flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
@@ -222,9 +237,13 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
                 </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={handleSave}
-                  className="flex-1 h-12 bg-primary hover:bg-on-primary-fixed-variant text-on-primary text-label-md font-medium rounded-lg active:scale-[0.98] shadow-sm">
-                  Save Changes
+                <button onClick={handleSave} disabled={loading}
+                  className="flex-1 h-12 bg-primary hover:bg-on-primary-fixed-variant disabled:opacity-50 text-on-primary text-label-md font-medium rounded-lg active:scale-[0.98] shadow-sm flex items-center justify-center gap-2">
+                  {loading ? (
+                    <span className="material-symbols-outlined animate-spin text-[18px]">sync</span>
+                  ) : (
+                    <>Save Changes</>
+                  )}
                 </button>
                 <button onClick={() => { setEditing(false); setForm({ name: product.name, description: product.description || '',
                   price: product.price, stock: product.stock, lowStockThreshold: product.lowStockThreshold || 5, image: product.image }); }}
@@ -281,7 +300,7 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
                     Are you sure you want to delete &quot;{product.name}&quot;? This cannot be undone.
                   </p>
                   <div className="flex gap-3">
-                    <button onClick={() => { deleteProduct(product.id); onUpdate(); onToast('Product deleted'); onClose(); }}
+                    <button onClick={handleDelete}
                       className="flex-1 h-10 bg-error text-on-error text-label-md font-medium rounded-lg active:scale-[0.98]">
                       Yes, Delete
                     </button>

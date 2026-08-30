@@ -23,8 +23,8 @@ async def get_profile(
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
     """Get current user's seller profile."""
-    from uuid import UUID
-    profile = await service.get_profile(UUID(user_id))
+    
+    profile = await service.get_profile(int(user_id))
     return profile
 
 
@@ -35,8 +35,8 @@ async def create_profile(
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
     """Create a new seller profile."""
-    from uuid import UUID
-    profile = await service.create_profile(UUID(user_id), data)
+    
+    profile = await service.create_profile(int(user_id), data)
     return profile
 
 
@@ -47,8 +47,8 @@ async def update_profile(
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
     """Update seller profile."""
-    from uuid import UUID
-    profile = await service.update_profile(UUID(user_id), data)
+    
+    profile = await service.update_profile(int(user_id), data)
     return profile
 
 
@@ -58,8 +58,8 @@ async def submit_profile(
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
     """Submit profile for verification review."""
-    from uuid import UUID
-    profile = await service.submit_for_review(UUID(user_id))
+    
+    profile = await service.submit_for_review(int(user_id))
     return ProfileSubmitResponse(profile=profile)
 
 
@@ -71,7 +71,7 @@ async def update_status(
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
     """Update verification status (admin action)."""
-    from uuid import UUID
-    target_id = UUID(profile_id) if profile_id else UUID(user_id)
+    
+    target_id = int(profile_id) if profile_id else int(user_id)
     profile = await service.update_status(target_id, data)
     return profile

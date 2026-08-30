@@ -1,10 +1,10 @@
 /**
  * CustomerList — list of customers with MD3 theme.
  * Material icons, tonal chips, 48px touch targets.
+ * Data loaded from backend API + derived from product reviews.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createCustomer, getCustomersBySeller, getDerivedCustomers } from '../../../services/storage';
-import { generateId } from '../../../hooks/useLocalStorage';
 import CustomerDrawer from './CustomerDrawer';
 
 export default function CustomerList({ sellerId, products: _products, onUpdate, onToast }) {
@@ -12,18 +12,39 @@ export default function CustomerList({ sellerId, products: _products, onUpdate, 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newContact, setNewContact] = useState('');
+  const [manualCustomers, setManualCustomers] = useState([]);
+  const [derivedCustomers, setDerivedCustomers] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  const manualCustomers = getCustomersBySeller(sellerId);
-  const derivedCustomers = getDerivedCustomers(sellerId);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [manual, derived] = await Promise.all([
+          getCustomersBySeller(sellerId),
+          getDerivedCustomers(sellerId),
+        ]);
+        if (!cancelled) {
+          setManualCustomers(manual);
+          setDerivedCustomers(derived);
+        }
+      } catch (err) {
+        console.error('Failed to load customers:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sellerId]);
 
   const allCustomers = [];
   const seen = new Set();
 
   for (const [key, data] of Object.entries(derivedCustomers)) {
-    const manual = manualCustomers.find((mc) => mc.name.toLowerCase().trim() === key);
+    const manual = manualCustomers.find((mc) => (mc.name || '').toLowerCase().trim() === key);
     allCustomers.push({
       id: manual?.id || `derived_${key}`, sellerId, name: data.name,
-      contact: manual?.contact || '', notes: manual?.notes || '',
+      contact: manual?.phone || '', notes: manual?.email || '',
       lastInteraction: data.lastDate, reviewCount: data.reviews.length,
       avgRating: data.reviews.length > 0 ? (data.reviews.reduce((s, r) => s + r.rating, 0) / data.reviews.length).toFixed(1) : null,
       reviews: data.reviews, isManual: false,
@@ -32,22 +53,40 @@ export default function CustomerList({ sellerId, products: _products, onUpdate, 
   }
 
   for (const mc of manualCustomers) {
-    const key = mc.name.toLowerCase().trim();
+    const key = (mc.name || '').toLowerCase().trim();
     if (!seen.has(key)) {
-      allCustomers.push({ ...mc, reviewCount: 0, avgRating: null, reviews: [], isManual: true });
+      allCustomers.push({ ...mc, contact: mc.phone || '', notes: mc.email || '', reviewCount: 0, avgRating: null, reviews: [], isManual: true });
     }
   }
 
-  const handleAddCustomer = (e) => {
+  const handleAddCustomer = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    createCustomer({
-      id: generateId(), sellerId, name: newName.trim(), contact: newContact.trim(),
-      notes: '', lastInteraction: new Date().toISOString(),
-    });
-    setNewName(''); setNewContact(''); setShowAddForm(false);
-    onUpdate(); onToast('Customer added!');
+    try {
+      await createCustomer({ name: newName.trim(), contact: newContact.trim() });
+      setNewName('');
+      setNewContact('');
+      setShowAddForm(false);
+      // Reload customers
+      const updated = await getCustomersBySeller(sellerId);
+      setManualCustomers(updated);
+      onUpdate();
+      onToast('Customer added!');
+    } catch (err) {
+      onToast('Failed to add customer', 'error');
+    }
   };
+
+  if (loading) {
+    return (
+      <div>
+        <h2 className="text-headline-lg text-on-surface mb-4" style={{ fontWeight: 600 }}>Customers</h2>
+        <div className="flex items-center justify-center py-16">
+          <span className="material-symbols-outlined text-[32px] text-on-surface-variant animate-pulse">sync</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -123,11 +162,6 @@ export default function CustomerList({ sellerId, products: _products, onUpdate, 
                 </p>
               </div>
             </div>
-            {customer.notes && (
-              <p className="text-label-sm text-on-surface-variant mt-2 truncate flex items-center gap-1">
-                <span className="material-symbols-outlined text-[12px]">edit_note</span> {customer.notes}
-              </p>
-            )}
           </button>
         ))}
       </div>

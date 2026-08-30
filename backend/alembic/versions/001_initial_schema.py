@@ -23,14 +23,8 @@ def upgrade() -> None:
     userRole_enum.create(op.get_bind(), checkfirst=True)
 
     sellerProfileStatus_enum = postgresql.ENUM(
-        "draft",
-        "submitted",
-        "under_review",
-        "verified",
-        "rejected",
-        "suspended",
-        name="sellerprofilestatus",
-        create_type=False,
+        "draft", "submitted", "under_review", "verified", "rejected", "suspended",
+        name="sellerprofilestatus", create_type=False,
     )
     sellerProfileStatus_enum.create(op.get_bind(), checkfirst=True)
 
@@ -75,9 +69,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("email"),
         sa.UniqueConstraint("phone"),
     )
-    op.create_index("idx_email", "users", ["email"], unique=True)
-    op.create_index("idx_role", "users", ["role"])
-    op.create_index("idx_is_active", "users", ["is_active"])
+    op.create_index("ix_users_email", "users", ["email"], unique=True)
+    op.create_index("ix_users_role", "users", ["role"])
+    op.create_index("ix_users_is_active", "users", ["is_active"])
 
     # Create seller_profiles table
     op.create_table(
@@ -90,32 +84,22 @@ def upgrade() -> None:
         sa.Column("phone", sa.String(length=20), nullable=True),
         sa.Column("email", sa.String(length=255), nullable=True),
         sa.Column("website", sa.String(length=500), nullable=True),
-        sa.Column("address_line_1", sa.String(length=255), nullable=False),
+        sa.Column("address_line_1", sa.String(length=255), nullable=True),
         sa.Column("address_line_2", sa.String(length=255), nullable=True),
-        sa.Column("city", sa.String(length=100), nullable=False),
+        sa.Column("city", sa.String(length=100), nullable=True),
         sa.Column("state", sa.String(length=100), nullable=True),
-        sa.Column("country", sa.String(length=100), nullable=False),
-        sa.Column("postal_code", sa.String(length=20), nullable=False),
-        sa.Column("license_number", sa.String(length=100), nullable=False),
-        sa.Column("registration_number", sa.String(length=100), nullable=True),
+        sa.Column("country", sa.String(length=100), nullable=True, default="India"),
+        sa.Column("postal_code", sa.String(length=20), nullable=True),
+        sa.Column("license_number", sa.String(length=100), nullable=True),
         sa.Column("verification_status", sellerProfileStatus_enum, nullable=False, server_default="draft"),
-        sa.Column("business_years", sa.Integer(), nullable=True),
-        sa.Column("employee_count", sa.Integer(), nullable=True),
-        sa.Column("annual_revenue", sa.String(length=50), nullable=True),
-        sa.Column("certification", sa.Text(), nullable=True),
-        sa.Column("verified_at", sa.DateTime(), nullable=True),
-        sa.Column("verification_notes", sa.Text(), nullable=True),
-        sa.Column("rejection_reason", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_seller_profiles_users"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id"),
-        sa.UniqueConstraint("license_number"),
     )
-    op.create_index("idx_verification_status", "seller_profiles", ["verification_status"])
-    op.create_index("idx_business_name", "seller_profiles", ["business_name"])
-    op.create_index("idx_license_number", "seller_profiles", ["license_number"])
+    op.create_index("ix_seller_profiles_verification_status", "seller_profiles", ["verification_status"])
+    op.create_index("ix_seller_profiles_business_name", "seller_profiles", ["business_name"])
 
     # Create seller_verifications table
     op.create_table(
@@ -136,9 +120,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seller_id", "verification_type", name="uq_seller_verification_type"),
     )
-    op.create_index("idx_seller_id", "seller_verifications", ["seller_id"])
-    op.create_index("idx_verification_type", "seller_verifications", ["verification_type"])
-    op.create_index("idx_status", "seller_verifications", ["status"])
+    op.create_index("ix_seller_verifications_seller_id", "seller_verifications", ["seller_id"])
+    op.create_index("ix_seller_verifications_type", "seller_verifications", ["verification_type"])
+    op.create_index("ix_seller_verifications_status", "seller_verifications", ["status"])
 
     # Create buyer_profiles table
     op.create_table(
@@ -162,8 +146,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id"),
     )
-    op.create_index("idx_user_id", "buyer_profiles", ["user_id"])
-    op.create_index("idx_is_business_buyer", "buyer_profiles", ["is_business_buyer"])
+    op.create_index("ix_buyer_profiles_user_id", "buyer_profiles", ["user_id"])
 
     # Create products table
     op.create_table(
@@ -190,10 +173,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["seller_id"], ["seller_profiles.id"], name="fk_products_seller"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("idx_seller_id", "products", ["seller_id"])
-    op.create_index("idx_category", "products", ["category"])
-    op.create_index("idx_status", "products", ["status"])
-    op.create_index("idx_name", "products", ["name"])
+    op.create_index("ix_products_seller_id", "products", ["seller_id"])
+    op.create_index("ix_products_category", "products", ["category"])
+    op.create_index("ix_products_status", "products", ["status"])
 
     # Create orders table
     op.create_table(
@@ -216,10 +198,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("order_number"),
     )
-    op.create_index("idx_order_number", "orders", ["order_number"])
-    op.create_index("idx_buyer_id", "orders", ["buyer_id"])
-    op.create_index("idx_seller_id", "orders", ["seller_id"])
-    op.create_index("idx_status", "orders", ["status"])
+    op.create_index("ix_orders_order_number", "orders", ["order_number"])
+    op.create_index("ix_orders_buyer_id", "orders", ["buyer_id"])
+    op.create_index("ix_orders_seller_id", "orders", ["seller_id"])
+    op.create_index("ix_orders_status", "orders", ["status"])
 
     # Create order_items table
     op.create_table(
@@ -236,7 +218,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["product_id"], ["products.id"], name="fk_order_items_product"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("idx_order_id", "order_items", ["order_id"])
+    op.create_index("ix_order_items_order_id", "order_items", ["order_id"])
 
     # Create transactions table
     op.create_table(
@@ -256,8 +238,8 @@ def upgrade() -> None:
         sa.UniqueConstraint("order_id"),
         sa.UniqueConstraint("transaction_id"),
     )
-    op.create_index("idx_status", "transactions", ["status"])
-    op.create_index("idx_transaction_id", "transactions", ["transaction_id"])
+    op.create_index("ix_transactions_status", "transactions", ["status"])
+    op.create_index("ix_transactions_transaction_id", "transactions", ["transaction_id"])
 
     # Create reviews table
     op.create_table(
@@ -281,8 +263,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["order_id"], ["orders.id"], name="fk_reviews_order"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("idx_product_id", "reviews", ["product_id"])
-    op.create_index("idx_buyer_id", "reviews", ["buyer_id"])
+    op.create_index("ix_reviews_product_id", "reviews", ["product_id"])
+    op.create_index("ix_reviews_buyer_id", "reviews", ["buyer_id"])
 
     # Create trust_scores table
     op.create_table(
@@ -303,7 +285,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seller_id"),
     )
-    op.create_index("idx_overall_score", "trust_scores", ["overall_score"])
+    op.create_index("ix_trust_scores_overall_score", "trust_scores", ["overall_score"])
 
     # Create analytics table
     op.create_table(
@@ -323,7 +305,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["seller_id"], ["seller_profiles.id"], name="fk_analytics_seller"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("idx_seller_id_date", "analytics", ["seller_id", "date"])
+    op.create_index("ix_analytics_seller_date", "analytics", ["seller_id", "date"])
 
     # Create audit_logs table
     op.create_table(
@@ -342,14 +324,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_audit_logs_user"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("idx_user_id", "audit_logs", ["user_id"])
-    op.create_index("idx_action", "audit_logs", ["action"])
-    op.create_index("idx_created_at", "audit_logs", ["created_at"])
+    op.create_index("ix_audit_logs_user_id", "audit_logs", ["user_id"])
+    op.create_index("ix_audit_logs_action", "audit_logs", ["action"])
+    op.create_index("ix_audit_logs_created_at", "audit_logs", ["created_at"])
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    # Drop all tables in reverse order of creation
     op.drop_table("audit_logs")
     op.drop_table("analytics")
     op.drop_table("trust_scores")
@@ -363,7 +344,6 @@ def downgrade() -> None:
     op.drop_table("seller_profiles")
     op.drop_table("users")
 
-    # Drop enums
     op.execute("DROP TYPE IF EXISTS userrole")
     op.execute("DROP TYPE IF EXISTS sellerprofilestatus")
     op.execute("DROP TYPE IF EXISTS verificationtype")

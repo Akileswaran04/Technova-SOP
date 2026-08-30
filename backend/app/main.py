@@ -11,10 +11,18 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from app.core.config import settings
+from app.core.exceptions import TechnovaException, NotFoundException, ConflictException, ValidationException, UnauthorizedException, ForbiddenException
 from app.infrastructure.mongodb import MongoDBClient
 from app.infrastructure.redis import RedisClient
 from app.modules.seller_profile.router import router as seller_profile_router
+from app.modules.product_listing.router import router as product_listing_router
+from app.modules.unified_inbox.router import router as unified_inbox_router
+from app.modules.buyer_discovery.router import router as buyer_discovery_router
+from app.modules.ai_communication.router import router as ai_communication_router
+from app.modules.authentication.router import router as auth_router
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -30,6 +38,30 @@ def create_app() -> FastAPI:
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
     )
+
+    # ============================================
+    # Exception Handlers
+    # ============================================
+
+    @app.exception_handler(NotFoundException)
+    async def not_found_handler(request: Request, exc: NotFoundException):
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(ConflictException)
+    async def conflict_handler(request: Request, exc: ConflictException):
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(ValidationException)
+    async def validation_handler(request: Request, exc: ValidationException):
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(UnauthorizedException)
+    async def unauthorized_handler(request: Request, exc: UnauthorizedException):
+        return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+    @app.exception_handler(ForbiddenException)
+    async def forbidden_handler(request: Request, exc: ForbiddenException):
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
 
     # ============================================
     # Middleware
@@ -117,19 +149,23 @@ def create_app() -> FastAPI:
     # Module Routers
     # ============================================
 
-    # Seller Profile Module (Implemented)
+    # Seller Profile Module
     app.include_router(seller_profile_router, prefix="/api/v1/sellers", tags=["Seller Profile"])
 
-    # Future modules will be registered here:
-    # app.include_router(authentication_router, prefix="/api/v1/auth", tags=["Authentication"])
-    # app.include_router(buyer_discovery_router, prefix="/api/v1/buyers", tags=["Buyer Discovery"])
-    # app.include_router(product_listing_router, prefix="/api/v1/products", tags=["Product Listing"])
-    # app.include_router(unified_inbox_router, prefix="/api/v1/conversations", tags=["Unified Inbox"])
-    # app.include_router(ai_communication_router, prefix="/api/v1/ai", tags=["AI Communication"])
-    # app.include_router(human_approval_router, prefix="/api/v1/admin/approvals", tags=["Human Approval"])
-    # app.include_router(analytics_router, prefix="/api/v1/analytics", tags=["Analytics"])
-    # app.include_router(api_integration_router, prefix="/api/v1/integrations", tags=["API Integration"])
-    # app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
+    # Product Listing Module
+    app.include_router(product_listing_router, prefix="/api/v1/products", tags=["Product Listing"])
+
+    # Unified Inbox Module
+    app.include_router(unified_inbox_router, prefix="/api/v1/conversations", tags=["Unified Inbox"])
+
+    # Buyer Discovery Module
+    app.include_router(buyer_discovery_router, prefix="/api/v1/customers", tags=["Buyer Discovery"])
+
+    # AI Communication Module
+    app.include_router(ai_communication_router, prefix="/api/v1/ai", tags=["AI Communication"])
+
+    # Authentication Module
+    app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 
     # ============================================
     # API Documentation Sections
@@ -151,6 +187,7 @@ def create_app() -> FastAPI:
                         "seller_verifications",
                         "buyer_profiles",
                         "products",
+                        "product_reviews",
                         "orders",
                         "order_items",
                         "transactions",
@@ -158,6 +195,10 @@ def create_app() -> FastAPI:
                         "trust_scores",
                         "analytics",
                         "audit_logs",
+                        "conversations",
+                        "messages",
+                        "customers",
+                        "ai_interactions",
                     ],
                 },
                 "MongoDB": {
@@ -170,14 +211,13 @@ def create_app() -> FastAPI:
                     "status": "Optional - for real-time features",
                     "use_cases": ["online_status", "typing_indicators", "cache", "pub_sub"],
                 },
-            },
-            "modules": {
+            },                "modules": {
                 "seller_profile": "IMPLEMENTED",
+                "product_listing": "IMPLEMENTED",
+                "unified_inbox": "IMPLEMENTED",
+                "buyer_discovery": "IMPLEMENTED",
+                "ai_communication": "IMPLEMENTED",
                 "authentication": "PLANNED",
-                "product_listing": "PLANNED",
-                "buyer_discovery": "PLANNED",
-                "unified_inbox": "PLANNED",
-                "ai_communication": "PLANNED",
                 "human_approval": "PLANNED",
                 "analytics": "PLANNED",
                 "api_integration": "PLANNED",

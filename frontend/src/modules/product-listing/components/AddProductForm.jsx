@@ -1,10 +1,9 @@
 /**
- * AddProductForm — simple form to add a new product.
+ * AddProductForm — simple form to add a new product via backend API.
  * MD3 theme: tonal inputs, Material icons, 48px touch targets.
  */
 import { useState, useRef } from 'react';
 import { createProduct } from '../../../services/storage';
-import { generateId } from '../../../hooks/useLocalStorage';
 import { DEMO_PRODUCT_CATEGORIES } from '../../../data/demoProductImages';
 
 function DemoImagePicker({ selectedImage, onSelect }) {
@@ -13,7 +12,6 @@ function DemoImagePicker({ selectedImage, onSelect }) {
 
   return (
     <div className="border border-outline-variant rounded-xl overflow-hidden bg-surface-container-low/30">
-      {/* Category tabs */}
       <div className="flex gap-1 p-2 overflow-x-auto hide-scrollbar bg-surface-container-low/50">
         {DEMO_PRODUCT_CATEGORIES.map((cat) => (
           <button
@@ -31,8 +29,6 @@ function DemoImagePicker({ selectedImage, onSelect }) {
           </button>
         ))}
       </div>
-
-      {/* Image grid */}
       <div className="p-3">
         <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
           {currentCategory.images.map((img) => (
@@ -71,6 +67,7 @@ export default function AddProductForm({ sellerId, onBack, onAdd }) {
     name: '', description: '', price: '', stock: '', lowStockThreshold: '5', image: null,
   });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -82,7 +79,7 @@ export default function AddProductForm({ sellerId, onBack, onAdd }) {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!form.name.trim()) { setError('Product name is required'); return; }
@@ -91,12 +88,22 @@ export default function AddProductForm({ sellerId, onBack, onAdd }) {
     const stock = parseInt(form.stock, 10);
     if (isNaN(stock) || stock < 0) { setError('Please enter a valid stock quantity (0 or more)'); return; }
 
-    createProduct({
-      id: generateId(), sellerId, name: form.name.trim(), description: form.description.trim(),
-      price, image: form.image, stock, lowStockThreshold: parseInt(form.lowStockThreshold, 10) || 5,
-      likes: 0, reviews: [], createdAt: new Date().toISOString(),
-    });
-    onAdd();
+    setLoading(true);
+    try {
+      await createProduct({
+        name: form.name.trim(),
+        description: form.description.trim(),
+        price,
+        image: form.image,
+        stock,
+        lowStockThreshold: parseInt(form.lowStockThreshold, 10) || 5,
+      });
+      onAdd();
+    } catch (err) {
+      setError(err.message || 'Failed to create product');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -114,7 +121,6 @@ export default function AddProductForm({ sellerId, onBack, onAdd }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Image upload */}
           <div className="flex flex-col gap-2">
             <label className="text-label-md text-on-surface">Product Image</label>
             <button
@@ -133,7 +139,6 @@ export default function AddProductForm({ sellerId, onBack, onAdd }) {
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
             
-            {/* Category-based demo image picker */}
             <div className="flex flex-col gap-2">
               <span className="text-label-sm text-on-surface-variant flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
@@ -186,10 +191,16 @@ export default function AddProductForm({ sellerId, onBack, onAdd }) {
             <p className="text-label-sm text-on-surface-variant">You'll see a warning when stock falls below this number</p>
           </div>
 
-          <button type="submit"
-            className="w-full h-12 flex items-center justify-center bg-primary hover:bg-on-primary-fixed-variant text-on-primary text-label-md font-medium rounded-lg transition-all active:scale-[0.98] shadow-sm">
-            <span className="material-symbols-outlined text-[18px] mr-2">add</span>
-            Add Product
+          <button type="submit" disabled={loading}
+            className="w-full h-12 flex items-center justify-center bg-primary hover:bg-on-primary-fixed-variant disabled:opacity-50 text-on-primary text-label-md font-medium rounded-lg transition-all active:scale-[0.98] shadow-sm">
+            {loading ? (
+              <span className="material-symbols-outlined animate-spin text-[18px]">sync</span>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-[18px] mr-2">add</span>
+                Add Product
+              </>
+            )}
           </button>
         </form>
       </div>

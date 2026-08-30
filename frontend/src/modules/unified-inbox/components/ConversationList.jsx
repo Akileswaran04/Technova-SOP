@@ -1,9 +1,9 @@
 /**
  * ConversationList — left panel of the inbox.
  * Shows list of conversations with avatar, name, last message, time, unread badge.
- * Search bar at top to filter conversations.
+ * Data loaded from backend API.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getConversationsBySeller } from '../../../services/storage';
 
 function formatTime(timestamp) {
@@ -25,7 +25,23 @@ function formatTime(timestamp) {
 
 export default function ConversationList({ sellerId, selectedId, onSelect }) {
   const [search, setSearch] = useState('');
-  const conversations = getConversationsBySeller(sellerId);
+  const [conversations, setConversations] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getConversationsBySeller(sellerId);
+        if (!cancelled) setConversations(data);
+      } catch (err) {
+        console.error('Failed to load conversations:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sellerId]);
 
   // Sort by last message time (newest first)
   const sorted = [...conversations].sort((a, b) => {
@@ -39,6 +55,19 @@ export default function ConversationList({ sellerId, selectedId, onSelect }) {
     const q = search.toLowerCase().trim();
     return !q || c.customerName.toLowerCase().includes(q) || (c.lastMessage || '').toLowerCase().includes(q);
   });
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="px-4 py-3 border-b border-outline-variant bg-surface-container-lowest">
+          <h2 className="text-headline-md text-on-surface" style={{ fontWeight: 600 }}>Inbox</h2>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <span className="material-symbols-outlined text-[32px] text-on-surface-variant animate-pulse">sync</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -105,7 +134,6 @@ export default function ConversationList({ sellerId, selectedId, onSelect }) {
                     </span>
                   )}
                 </div>
-                {/* Order tag */}
                 {convo.orderTag && (
                   <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-surface-container rounded-full text-label-sm text-on-surface-variant">
                     <span className="material-symbols-outlined text-[12px]">receipt_long</span>

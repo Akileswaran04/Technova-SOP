@@ -1,6 +1,7 @@
 /**
  * InventoryTable — stock-focused view with MD3 theme.
  * Material icons, 48px touch targets, tonal chips.
+ * All stock adjustments go through backend API.
  */
 import { useState } from 'react';
 import { updateProduct } from '../../../../services/storage';
@@ -8,14 +9,18 @@ import { updateProduct } from '../../../../services/storage';
 export default function InventoryTable({ products, onUpdate, onToast }) {
   const [sortBy, setSortBy] = useState('lowStock');
 
-  const adjustStock = (productId, delta) => {
+  const adjustStock = async (productId, delta) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
     const newStock = Math.max(0, product.stock + delta);
-    updateProduct(productId, { stock: newStock });
-    onUpdate();
-    if (newStock === 0) onToast(`${product.name} is now out of stock!`, 'info');
-    else if (newStock <= (product.lowStockThreshold || 5)) onToast(`${product.name} is low on stock`, 'info');
+    try {
+      await updateProduct(productId, { stock: newStock });
+      onUpdate();
+      if (newStock === 0) onToast(`${product.name} is now out of stock!`, 'info');
+      else if (newStock <= (product.lowStockThreshold || 5)) onToast(`${product.name} is low on stock`, 'info');
+    } catch (err) {
+      onToast('Failed to update stock', 'error');
+    }
   };
 
   const getStatusBadge = (stock, threshold) => {

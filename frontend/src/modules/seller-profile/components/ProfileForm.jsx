@@ -1,18 +1,9 @@
 /**
  * ProfileForm — LinkedIn/MD3 style profile.
- * Bento grid: Trust Score card (4 cols) + Store Details (8 cols).
- * Single "Edit Profile" button toggles entire form between view/edit.
- * Floating-label inputs, circular trust gauge, document cards.
- * Demo images for placeholder states.
+ * All data loaded from backend API.
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { updateSeller, computeTrustScore, getReviewCount, getRecentReviews, getProductsBySeller } from '../../../services/storage';
-import TrustScoreBadge from '../../../components/shared/TrustScoreBadge';
-import DocumentUpload from './DocumentUpload';
-
-// Demo placeholder images (landscape/nature for cover, store icon for avatar)
-const DEMO_COVER = 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=1200&h=400&fit=crop&q=80';
-const DEMO_AVATAR = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&h=300&fit=crop&q=80';
 
 function getTimeAgo(dateString) {
   const date = new Date(dateString);
@@ -43,10 +34,7 @@ function FloatingInput({ label, value, onChange, type = 'text', placeholder, dis
         placeholder={placeholder || ' '}
         disabled={disabled}
         className={`w-full h-14 px-4 pt-5 pb-1 rounded-xl border-2 font-body-lg text-body-lg text-on-surface outline-none transition-all
-          ${disabled
-            ? 'border-outline-variant bg-transparent cursor-default'
-            : 'border-outline-variant bg-transparent focus:border-primary'
-          }`}
+          ${disabled ? 'border-outline-variant bg-transparent cursor-default' : 'border-outline-variant bg-transparent focus:border-primary'}`}
       />
       <label
         htmlFor={id}
@@ -69,10 +57,7 @@ function FloatingSelect({ label, value, onChange, options, disabled, id }) {
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         className={`w-full h-14 px-4 pt-5 pb-1 pr-10 rounded-xl border-2 font-body-lg text-body-lg text-on-surface outline-none transition-all appearance-none cursor-pointer
-          ${disabled
-            ? 'border-outline-variant bg-transparent cursor-default'
-            : 'border-outline-variant bg-transparent focus:border-primary'
-          }`}
+          ${disabled ? 'border-outline-variant bg-transparent cursor-default' : 'border-outline-variant bg-transparent focus:border-primary'}`}
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -103,10 +88,7 @@ function FloatingTextarea({ label, value, onChange, rows = 4, placeholder, disab
         disabled={disabled}
         maxLength={maxLength}
         className={`w-full px-5 pt-5 pb-8 rounded-xl border-2 font-body-lg text-body-lg text-on-surface outline-none transition-all resize-y min-h-[120px]
-          ${disabled
-            ? 'border-outline-variant bg-transparent cursor-default'
-            : 'border-outline-variant bg-transparent focus:border-primary'
-          }`}
+          ${disabled ? 'border-outline-variant bg-transparent cursor-default' : 'border-outline-variant bg-transparent focus:border-primary'}`}
       />
       <label
         htmlFor={id}
@@ -131,7 +113,6 @@ function TrustGauge({ score, reviewCount }) {
 
   return (
     <div className="flex flex-col items-center">
-      {/* Circular gauge */}
       <div className="relative w-28 h-28 flex items-center justify-center mb-4">
         <svg className="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
           <circle className="stroke-surface-container-highest" cx="50" cy="50" fill="transparent" r="40" strokeWidth="7" />
@@ -188,68 +169,110 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
   const [coverImage, setCoverImage] = useState(seller.coverImage || null);
   const [avatarImage, setAvatarImage] = useState(seller.avatarImage || null);
   const [documents, setDocuments] = useState(seller.documents || []);
+  const [loading, setLoading] = useState(false);
+
+  // Async data
+  const [trustScore, setTrustScore] = useState(null);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [recentReviews, setRecentReviews] = useState([]);
+  const [totalProducts, setTotalProducts] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [score, count, reviews, products] = await Promise.all([
+          computeTrustScore(seller.id),
+          getReviewCount(seller.id),
+          getRecentReviews(seller.id, 10),
+          getProductsBySeller(seller.id),
+        ]);
+        if (!cancelled) {
+          setTrustScore(score);
+          setReviewCount(count);
+          setRecentReviews(reviews);
+          setTotalProducts(products.length);
+        }
+      } catch (err) {
+        console.error('Failed to load profile data:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [seller.id]);
 
   const [form, setForm] = useState({
-    storeName: seller.storeName || '',
-    category: seller.category || '',
-    bio: seller.bio || '',
+    storeName: seller.business_name || seller.storeName || '',
+    category: seller.business_type || seller.category || '',
+    bio: seller.description || seller.bio || '',
     phone: seller.phone || '',
     email: seller.email || '',
-    address: seller.address || '',
+    address: seller.address_line_1 || seller.address || '',
     hours: seller.hours || '',
   });
 
-  const trustScore = computeTrustScore(seller.id);
-  const reviewCount = getReviewCount(seller.id);
-  const recentReviews = getRecentReviews(seller.id, 10);
-  const sellerProducts = getProductsBySeller(seller.id);
-  const totalProducts = sellerProducts.length;
-  const memberSince = seller.createdAt ? new Date(seller.createdAt) : new Date();
+  const memberSince = seller.created_at || seller.createdAt ? new Date(seller.created_at || seller.createdAt) : new Date();
   const monthsOld = Math.max(1, Math.floor((new Date() - memberSince) / (30 * 86400000)));
-  const verifiedDocs = (seller.documents || []).filter(d => d.status === 'verified').length;
-  const totalDocs = (seller.documents || []).length;
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
-  const handleSave = () => {
-    const updated = updateSeller(seller.id, { ...form, documents, coverImage, avatarImage });
-    if (updated) onSellerUpdate(updated);
-    setEditing(false);
-    onToast('Profile saved!');
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const updated = await updateSeller(seller.id, { ...form, documents, coverImage, avatarImage });
+      if (updated) onSellerUpdate(updated);
+      setEditing(false);
+      onToast('Profile saved!');
+    } catch (err) {
+      onToast('Failed to save profile', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancel = () => {
     setEditing(false);
     setForm({
-      storeName: seller.storeName || '', category: seller.category || '', bio: seller.bio || '',
-      phone: seller.phone || '', email: seller.email || '', address: seller.address || '', hours: seller.hours || '',
+      storeName: seller.business_name || seller.storeName || '',
+      category: seller.business_type || seller.category || '',
+      bio: seller.description || seller.bio || '',
+      phone: seller.phone || '', email: seller.email || '',
+      address: seller.address_line_1 || seller.address || '',
+      hours: seller.hours || '',
     });
     setDocuments(seller.documents || []);
   };
 
-  const handleCoverChange = (e) => {
+  const handleCoverChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       setCoverImage(ev.target.result);
       if (!editing) {
-        updateSeller(seller.id, { coverImage: ev.target.result });
-        onSellerUpdate({ ...seller, coverImage: ev.target.result });
+        try {
+          await updateSeller(seller.id, { coverImage: ev.target.result });
+          onSellerUpdate({ ...seller, coverImage: ev.target.result });
+        } catch (err) {
+          console.error('Failed to update cover:', err);
+        }
       }
     };
     reader.readAsDataURL(file);
   };
 
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       setAvatarImage(ev.target.result);
       if (!editing) {
-        updateSeller(seller.id, { avatarImage: ev.target.result });
-        onSellerUpdate({ ...seller, avatarImage: ev.target.result });
+        try {
+          await updateSeller(seller.id, { avatarImage: ev.target.result });
+          onSellerUpdate({ ...seller, avatarImage: ev.target.result });
+        } catch (err) {
+          console.error('Failed to update avatar:', err);
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -257,7 +280,6 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
 
   return (
     <div className="max-w-5xl mx-auto">
-      {/* ── Page Header ── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <h2 className="text-display-lg text-on-surface" style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>My Profile</h2>
@@ -265,7 +287,6 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
         </div>
       </div>
 
-      {/* ── Cover Photo ── */}
       <div className="relative h-52 sm:h-64 rounded-t-2xl overflow-hidden shadow-md">
         {coverImage ? (
           <img src={coverImage} alt="Cover" className="w-full h-full object-cover" />
@@ -288,12 +309,9 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
         <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
       </div>
 
-      {/* ── Bento Grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 -mt-12 relative z-10">
-
-        {/* ── Trust Score Card (4 cols) ── */}
+        {/* Trust Score Card */}
         <div className="col-span-1 lg:col-span-4 bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-sm flex flex-col overflow-hidden">
-          {/* Avatar + Name Banner */}
           <div className="relative pt-8 pb-6 px-6 bg-gradient-to-b from-primary-container/10 to-transparent">
             <div className="flex flex-col items-center relative">
               <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-surface-container-lowest shadow-lg relative z-10">
@@ -314,11 +332,11 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
               </button>
               <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
 
-              <h2 className="font-headline-lg text-headline-lg text-on-surface text-center mt-4">{seller.storeName || 'Your Store'}</h2>
-              {seller.category && (
+              <h2 className="font-headline-lg text-headline-lg text-on-surface text-center mt-4">{seller.business_name || seller.storeName || 'Your Store'}</h2>
+              {(seller.business_type || seller.category) && (
                 <span className="mt-2 px-3 py-1 bg-primary-container/15 text-primary rounded-full text-label-sm font-medium flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px]">category</span>
-                  {seller.category}
+                  {seller.business_type || seller.category}
                 </span>
               )}
             </div>
@@ -338,14 +356,14 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
           </div>
         </div>
 
-        {/* ── Store Details (8 cols) ── */}
+        {/* Store Details */}
         <div className="col-span-1 lg:col-span-8 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-headline-lg text-headline-lg text-on-surface">Store Details</h3>
-            {seller.category && (
+            {(seller.business_type || seller.category) && (
               <span className="px-3 py-1.5 bg-primary-container/15 text-primary rounded-full text-label-sm font-medium flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px]">category</span>
-                {seller.category}
+                {seller.business_type || seller.category}
               </span>
             )}
           </div>
@@ -377,7 +395,7 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
           </div>
         </div>
 
-        {/* ── Quick Stats (full width) ── */}
+        {/* Quick Stats */}
         <div className="col-span-1 lg:col-span-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
@@ -397,7 +415,7 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
           </div>
         </div>
 
-        {/* ── About Us (full width) ── */}
+        {/* About Us */}
         <div className="col-span-1 lg:col-span-12 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -417,7 +435,7 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
             maxLength={500} rows={4} />
         </div>
 
-        {/* ── Business Documents (full width) ── */}
+        {/* Business Documents */}
         <div className="col-span-1 lg:col-span-12 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
             <div className="flex items-center gap-3">
@@ -428,22 +446,6 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
                 <h3 className="font-headline-lg text-headline-lg text-on-surface">Business Documents</h3>
                 <p className="text-body-md text-on-surface-variant mt-0.5">Manage your operational licenses and certifications.</p>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {totalDocs > 0 && (
-                <span className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-label-sm text-on-surface-variant">
-                  {verifiedDocs}/{totalDocs} verified
-                </span>
-              )}
-              {editing && (
-                <button
-                  onClick={() => document.getElementById('doc-upload-trigger')?.click()}
-                  className="h-11 px-5 rounded-full bg-primary text-on-primary hover:bg-primary/90 font-label-md text-label-md flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-[20px]">upload</span>
-                  Upload New
-                </button>
-              )}
             </div>
           </div>
 
@@ -458,50 +460,27 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
               {documents.map((doc) => (
                 <div key={doc.id} className="flex items-center justify-between p-5 rounded-xl border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low hover:border-primary transition-all group">
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      doc.status === 'verified' ? 'bg-[#E8F5E9] text-[#2E7D32]' : 'bg-[#FFF8E1] text-[#F57F17]'
-                    }`}>
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${doc.status === 'verified' ? 'bg-[#E8F5E9] text-[#2E7D32]' : 'bg-[#FFF8E1] text-[#F57F17]'}`}>
                       <span className="material-symbols-outlined text-[24px]">picture_as_pdf</span>
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-label-md text-label-md text-on-surface group-hover:text-primary transition-colors truncate">
-                        {doc.name}
-                      </h4>
+                      <h4 className="font-label-md text-label-md text-on-surface group-hover:text-primary transition-colors truncate">{doc.name}</h4>
                       <p className="text-label-sm text-on-surface-variant mt-0.5">
                         Uploaded {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                    <span className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1.5 shadow-sm border ${
-                      doc.status === 'verified'
-                        ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#A5D6A7]'
-                        : 'bg-[#FFF8E1] text-[#F57F17] border-[#FFE082]'
-                    }`}>
-                      <span className="material-symbols-outlined text-[16px]">
-                        {doc.status === 'verified' ? 'check_circle' : 'schedule'}
-                      </span>
-                      {doc.status === 'verified' ? 'Verified' : 'Pending Review'}
-                    </span>
-                    {editing && (
-                      <button
-                        onClick={() => setDocuments(documents.filter((d) => d.id !== doc.id))}
-                        className="text-on-surface-variant hover:text-error hover:bg-error-container/30 p-1.5 rounded-full transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                      </button>
-                    )}
-                  </div>
+                  <span className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1.5 shadow-sm border ${doc.status === 'verified' ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#A5D6A7]' : 'bg-[#FFF8E1] text-[#F57F17] border-[#FFE082]'}`}>
+                    <span className="material-symbols-outlined text-[16px]">{doc.status === 'verified' ? 'check_circle' : 'schedule'}</span>
+                    {doc.status === 'verified' ? 'Verified' : 'Pending Review'}
+                  </span>
                 </div>
               ))}
             </div>
           )}
-
-          {/* Hidden file input for document upload */}
-          <DocumentUpload documents={documents} onChange={setDocuments} />
         </div>
 
-        {/* ── Activity Feed ── */}
+        {/* Recent Activity */}
         {recentReviews.length > 0 && (
           <div className="col-span-1 lg:col-span-12 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
             <div className="flex items-center justify-between mb-6">
@@ -542,25 +521,6 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
                         </div>
                       </div>
                       <p className="text-body-md text-on-surface-variant mt-2 leading-relaxed">{review.comment}</p>
-                      {review.sellerReply && (
-                        <div className="mt-3 bg-surface-container-low rounded-lg p-3 border border-outline-variant/50">
-                          <p className="text-label-sm font-medium text-primary flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">storefront</span>
-                            Your reply
-                          </p>
-                          <p className="text-body-md text-on-surface-variant mt-1">{review.sellerReply}</p>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-outline-variant/50">
-                        <button className="flex items-center gap-1.5 text-label-sm text-on-surface-variant hover:text-primary transition-colors">
-                          <span className="material-symbols-outlined text-[16px]">thumb_up</span> Helpful
-                        </button>
-                        {!review.sellerReply && (
-                          <button className="flex items-center gap-1.5 text-label-sm text-on-surface-variant hover:text-primary transition-colors">
-                            <span className="material-symbols-outlined text-[16px]">reply</span> Reply
-                          </button>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -569,7 +529,7 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
           </div>
         )}
 
-        {/* ── Form Actions ── */}
+        {/* Form Actions */}
         <div className="col-span-1 lg:col-span-12 flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
           {editing ? (
             <>
@@ -578,10 +538,16 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
                 <span className="material-symbols-outlined text-[18px]">close</span>
                 Cancel
               </button>
-              <button onClick={handleSave}
-                className="h-12 px-8 rounded-full bg-primary text-on-primary font-label-md text-label-md hover:shadow-md hover:bg-primary/90 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 w-full sm:w-auto">
-                <span className="material-symbols-outlined text-[18px]">check</span>
-                Save Changes
+              <button onClick={handleSave} disabled={loading}
+                className="h-12 px-8 rounded-full bg-primary text-on-primary font-label-md text-label-md hover:shadow-md hover:bg-primary/90 active:scale-95 disabled:opacity-50 transition-all duration-200 flex items-center justify-center gap-2 w-full sm:w-auto">
+                {loading ? (
+                  <span className="material-symbols-outlined animate-spin text-[18px]">sync</span>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">check</span>
+                    Save Changes
+                  </>
+                )}
               </button>
             </>
           ) : (

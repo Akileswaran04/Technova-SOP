@@ -13,7 +13,13 @@ from alembic import context
 
 # Import all models so Alembic can detect them
 from app.infrastructure.postgres.base import Base
-from app.modules.seller_profile.models import User, SellerProfile, SellerVerification  # noqa: F401
+from app.modules.seller_profile.models import (  # noqa: F401
+    User, SellerProfile, SellerVerification,
+    Product, ProductReview,
+    Conversation, Message,
+    Customer,
+    AIInteraction,
+)
 
 config = context.config
 if config.config_file_name is not None:
@@ -23,6 +29,8 @@ target_metadata = Base.metadata
 
 # Override sqlalchemy.url from environment
 import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 database_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
 config.set_main_option("sqlalchemy.url", database_url)
 

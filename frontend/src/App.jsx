@@ -1,10 +1,10 @@
 /**
  * App.jsx — Seller Dashboard single-page application.
  * MD3 theme: tonal surfaces, Material icons, Inter font.
+ * Data loaded from PostgreSQL backend via API.
  */
-import { useState, useCallback } from 'react';
-import { clearSession, getSellerById, getProductsBySeller, updateSeller, getTotalUnread } from './services/storage';
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { useState, useCallback, useEffect } from 'react';
+import { clearSession, getSession, getSellerById, getProductsBySeller, updateSeller, getTotalUnread } from './services/storage';
 import LoginScreen from './components/LoginScreen';
 import OnboardingForm from './components/OnboardingForm';
 import SellerHeader from './components/SellerHeader';
@@ -15,48 +15,99 @@ import { InventoryTable } from './modules/product-listing/components/inventory';
 import { InboxTab } from './modules/unified-inbox';
 import { CustomerList } from './modules/buyer-discovery';
 import { ProfileForm } from './modules/seller-profile';
+import { AnalyticsTab } from './modules/analytics';
 import Toast from './components/shared/Toast';
 import { getActiveModules } from './modules/MODULES';
 import './index.css';
 
 export default function App() {
-  const [session, setSession] = useLocalStorage('msme_session', null);
-  const [seller, setSeller] = useState(() => {
-    if (session?.loggedInSellerId) return getSellerById(session.loggedInSellerId);
-    return null;
-  });
-
+  const session = getSession();
+  const [seller, setSeller] = useState(null);
+  const [loading, setLoading] = useState(!!session?.token);
   const [activeTab, setActiveTab] = useState('products');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const [products, setProducts] = useState(() => seller ? getProductsBySeller(seller.id) : []);
+  const [products, setProducts] = useState([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Load seller profile from API on mount
+  useEffect(() => {
+    if (!session?.token) { setLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const sellerData = await getSellerById();
+        if (!cancelled) {
+          setSeller(sellerData);
+          // Load products after seller is loaded
+          if (sellerData?.id) {
+            const prods = await getProductsBySeller(sellerData.id);
+            if (!cancelled) setProducts(prods);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load seller:', err);
+        clearSession();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reload products when refreshKey changes
+  useEffect(() => {
+    if (!seller?.id) return;
+    let cancelled = false;
+    (async () => {
+      const prods = await getProductsBySeller(seller.id);
+      if (!cancelled) setProducts(prods);
+    })();
+    return () => { cancelled = true; };
+  }, [seller?.id, refreshKey]);
 
   const refreshProducts = useCallback(() => {
-    if (seller) setProducts(getProductsBySeller(seller.id));
-  }, [seller]);
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
   }, []);
 
-  const handleLogin = useCallback((sellerData) => {
-    setSession({ loggedInSellerId: sellerData.id });
-    setSeller(sellerData);
-  }, [setSession]);
+  const handleLogin = useCallback(async (sellerData) => {
+    // sellerData comes from LoginScreen after successful API login
+    setLoading(true);
+    try {
+      const profile = await getSellerById();
+      setSeller(profile);
+      if (profile?.id) {
+        const prods = await getProductsBySeller(profile.id);
+        setProducts(prods);
+      }
+    } catch (err) {
+      console.error('Failed to load profile after login:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const handleLogout = useCallback(() => {
     clearSession();
-    setSession(null);
     setSeller(null);
     setProducts([]);
     setActiveTab('products');
-  }, [setSession]);
+  }, []);
 
-  const handleOnboardingComplete = useCallback((data) => {
-    const updated = updateSeller(seller.id, data);
-    if (updated) {
-      setSeller(updated);
-      showToast('Welcome! Your store is set up');
+  const handleOnboardingComplete = useCallback(async (data) => {
+    try {
+      const updated = await updateSeller(seller.id, data);
+      if (updated) {
+        const profile = await getSellerById();
+        setSeller(profile);
+        showToast('Welcome! Your store is set up');
+      }
+    } catch (err) {
+      showToast('Failed to save profile', 'error');
     }
   }, [seller, showToast]);
 
@@ -67,10 +118,20 @@ export default function App() {
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   // Unread message count
-  const [unreadCount, setUnreadCount] = useState(() => seller ? getTotalUnread(seller.id) : 0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    if (!seller?.id) return;
+    let cancelled = false;
+    (async () => {
+      const count = await getTotalUnread(seller.id);
+      if (!cancelled) setUnreadCount(count);
+    })();
+    return () => { cancelled = true; };
+  }, [seller?.id, refreshKey]);
+
   const refreshUnread = useCallback(() => {
-    if (seller) setUnreadCount(getTotalUnread(seller.id));
-  }, [seller]);
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   // Low stock alerts
   const [alertDismissed, setAlertDismissed] = useState(false);
@@ -79,8 +140,20 @@ export default function App() {
   const lowStock = lowStockProducts.filter((p) => p.stock > 0);
   const showAlert = lowStockProducts.length > 0 && !alertDismissed;
 
-  if (!seller) return <LoginScreen onLogin={handleLogin} />;
-  if (!seller.storeName) return <OnboardingForm seller={seller} onComplete={handleOnboardingComplete} />;
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <span className="material-symbols-outlined text-[48px] text-primary animate-pulse">sync</span>
+          <p className="text-body-md text-on-surface-variant mt-3">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session?.token || !seller) return <LoginScreen onLogin={handleLogin} />;
+  if (!seller.business_name) return <OnboardingForm seller={seller} onComplete={handleOnboardingComplete} />;
 
   return (
     <div className="min-h-screen bg-background flex flex-col lg:flex-row">
@@ -161,6 +234,9 @@ export default function App() {
         )}
         {activeTab === 'customers' && (
           <CustomerList sellerId={seller.id} products={products} onUpdate={refreshProducts} onToast={showToast} />
+        )}
+        {activeTab === 'analytics' && (
+          <AnalyticsTab sellerId={seller.id} onToast={showToast} />
         )}
         {activeTab === 'profile' && (
           <ProfileForm seller={seller} onSellerUpdate={handleSellerUpdate} onToast={showToast} />

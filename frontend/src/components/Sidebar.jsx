@@ -1,17 +1,16 @@
 /**
- * Sidebar — dual-mode navigation:
- * - Desktop (lg+): always-visible fixed sidebar, 256px wide
- * - Tablet (md): overlay drawer toggled by hamburger, slides in from left
- * - Mobile (<md): hidden entirely, bottom nav takes over
+ * Sidebar — dual-mode navigation.
+ * Desktop (lg+): always-visible fixed sidebar, 256px wide
+ * Tablet (md): overlay drawer toggled by hamburger
+ * Mobile (<md): hidden entirely, bottom nav takes over
  */
-import { useRef } from 'react';
-import TrustScoreBadge from './shared/TrustScoreBadge';
-import { computeTrustScore, getReviewCount, updateSeller } from '../services/storage';
+import { useRef, useState, useEffect } from 'react';
+import { updateSeller } from '../services/storage';
 import { getNavTabs } from '../modules/MODULES';
 
 const TABS = getNavTabs();
 
-function SidebarContent({ seller, activeTab, onTabChange, onLogout, onClose, fileInputRef, trustScore, reviewCount, handleAvatarChange }) {
+function SidebarContent({ seller, activeTab, onTabChange, onLogout, onClose, fileInputRef, handleAvatarChange }) {
   const handleTab = (key) => {
     onTabChange(key);
     onClose?.();
@@ -36,14 +35,11 @@ function SidebarContent({ seller, activeTab, onTabChange, onLogout, onClose, fil
         </button>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
         <h2 className="text-headline-md text-on-surface text-center" style={{ fontWeight: 700 }}>
-          {seller.storeName || 'My Store'}
+          {seller.business_name || seller.storeName || 'My Store'}
         </h2>
-        {seller.category && (
-          <p className="text-label-md text-on-surface-variant text-center mt-0.5">{seller.category}</p>
+        {seller.business_type && (
+          <p className="text-label-md text-on-surface-variant text-center mt-0.5">{seller.business_type}</p>
         )}
-        <div className="mt-3">
-          <TrustScoreBadge score={trustScore} reviewCount={reviewCount} />
-        </div>
       </div>
 
       {/* Navigation */}
@@ -94,38 +90,37 @@ function SidebarContent({ seller, activeTab, onTabChange, onLogout, onClose, fil
 
 export default function Sidebar({ seller, activeTab, onTabChange, onSellerUpdate, onLogout, isOpen, onClose }) {
   const fileInputRef = useRef(null);
-  const trustScore = computeTrustScore(seller.id);
-  const reviewCount = getReviewCount(seller.id);
 
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const dataUrl = ev.target.result;
-      updateSeller(seller.id, { avatarImage: dataUrl });
-      onSellerUpdate({ ...seller, avatarImage: dataUrl });
+      try {
+        await updateSeller(seller.id, { avatarImage: dataUrl });
+        onSellerUpdate({ ...seller, avatarImage: dataUrl });
+      } catch (err) {
+        console.error('Failed to update avatar:', err);
+      }
     };
     reader.readAsDataURL(file);
   };
 
-  const sharedProps = { seller, activeTab, onTabChange, onLogout, onClose, fileInputRef, trustScore, reviewCount, handleAvatarChange };
+  const sharedProps = { seller, activeTab, onTabChange, onLogout, onClose, fileInputRef, handleAvatarChange };
 
   return (
     <>
-      {/* Desktop sidebar — sticky flex child in the main layout */}
+      {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 h-screen sticky top-0 flex-col py-6 bg-surface-container-low border-r border-outline-variant flex-shrink-0">
         <SidebarContent {...sharedProps} />
       </aside>
 
-      {/* Tablet drawer — overlay on md screens, hidden on lg+ */}
+      {/* Tablet drawer */}
       {isOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          {/* Backdrop */}
           <div className="absolute inset-0 bg-inverse-surface/40" onClick={onClose} />
-          {/* Drawer panel */}
           <aside className="w-64 h-full bg-surface-container-low flex flex-col py-6 shadow-2xl animate-slide-in relative">
-            {/* Close button */}
             <div className="flex justify-end px-4 mb-2">
               <button onClick={onClose}
                 className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors">

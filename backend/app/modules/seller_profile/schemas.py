@@ -4,7 +4,7 @@ Pydantic schemas for seller_profile module.
 
 from datetime import datetime
 from typing import Optional, List
-from uuid import UUID
+
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -55,8 +55,8 @@ class SellerProfileUpdate(BaseModel):
 
 class SellerProfileResponse(BaseModel):
     """Seller profile response."""
-    id: UUID
-    user_id: UUID
+    id: int
+    user_id: int
     business_name: str
     business_type: str
     description: Optional[str]
@@ -80,8 +80,8 @@ class SellerProfileResponse(BaseModel):
 
 class SellerVerificationResponse(BaseModel):
     """Verification record response."""
-    id: UUID
-    seller_id: UUID
+    id: int
+    seller_id: int
     verification_type: str
     status: str
     reviewed_by: Optional[str]

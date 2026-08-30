@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "TECHNOVA"
     APP_VERSION: str = "0.1.0"
+    ENVIRONMENT: str = "development"
     DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"
 
     # Database — PostgreSQL
     DATABASE_URL: str = "postgresql+asyncpg://technova:technova@localhost:5432/technova"
@@ -38,6 +40,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()
