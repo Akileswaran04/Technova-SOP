@@ -10,14 +10,11 @@ import OnboardingForm from './components/OnboardingForm';
 import SellerHeader from './components/SellerHeader';
 import BottomNav from './components/BottomNav';
 import Sidebar from './components/Sidebar';
-import { ProductGrid } from './modules/products';
-import { InventoryTable } from './modules/inventory';
-import { InboxTab } from './modules/inbox';
-import { CustomerList } from './modules/customers';
-import { ProfileForm } from './modules/profile';
-import OrdersModule from './modules/orders';
-import AnalyticsModule from './modules/analytics';
-import ListingsModule from './modules/listings';
+import { ProductGrid } from './modules/product-listing';
+import { InventoryTable } from './modules/product-listing/components/inventory';
+import { InboxTab } from './modules/unified-inbox';
+import { CustomerList } from './modules/buyer-discovery';
+import { ProfileForm } from './modules/seller-profile';
 import Toast from './components/shared/Toast';
 import { getActiveModules } from './modules/MODULES';
 import './index.css';
@@ -168,9 +165,7 @@ export default function App() {
         {activeTab === 'profile' && (
           <ProfileForm seller={seller} onSellerUpdate={handleSellerUpdate} onToast={showToast} />
         )}
-        {activeTab === 'orders' && <OrdersModule />}
-        {activeTab === 'analytics' && <AnalyticsModule />}
-        {activeTab === 'listings' && <ListingsModule />}
+
       </main>
 
       {/* Mobile Bottom Nav (hidden on lg+ where sidebar takes over) */}

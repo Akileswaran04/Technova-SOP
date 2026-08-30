@@ -1,7 +1,7 @@
 /**
- * MODULES.js — Central module registry.
+ * MODULES.js — TECHNOVA central module registry.
  *
- * All 8 dashboard modules are defined here. To add a new module:
+ * All 10 business domain modules are defined here. To add a new module:
  * 1. Create a folder under src/modules/<module-key>/
  * 2. Export a React component from its index.jsx
  * 3. Add an entry to the MODULES array below
@@ -10,40 +10,28 @@
 
 const MODULES = [
   {
-    key: 'products',
+    key: 'seller-profile',
+    icon: 'person',
+    label: 'Seller Profile',
+    description: 'Manage your store details, verification, and public presence',
+  },
+  {
+    key: 'product-listing',
     icon: 'inventory_2',
     label: 'Products',
     description: 'Manage your catalog and product listings',
   },
   {
-    key: 'inventory',
-    icon: 'shelves',
-    label: 'Inventory',
-    description: 'Track and adjust stock levels',
-  },
-  {
-    key: 'inbox',
+    key: 'unified-inbox',
     icon: 'chat',
     label: 'Inbox',
-    description: 'Message customers and manage conversations',
+    description: 'Unified messaging across all channels',
   },
   {
-    key: 'customers',
+    key: 'buyer-discovery',
     icon: 'group',
-    label: 'Customers',
-    description: 'View customer profiles and review history',
-  },
-  {
-    key: 'profile',
-    icon: 'person',
-    label: 'Profile',
-    description: 'Manage your store details and verification',
-  },
-  {
-    key: 'orders',
-    icon: 'receipt_long',
-    label: 'Orders',
-    description: 'Track incoming orders and fulfillment',
+    label: 'Buyers',
+    description: 'Discover and connect with buyers',
     comingSoon: true,
   },
   {
@@ -54,10 +42,31 @@ const MODULES = [
     comingSoon: true,
   },
   {
-    key: 'listings',
-    icon: 'storefront',
-    label: 'Listings',
-    description: 'Manage marketplace listings and promotions',
+    key: 'ai-communication',
+    icon: 'smart_toy',
+    label: 'AI Comms',
+    description: 'AI-powered communication intelligence',
+    comingSoon: true,
+  },
+  {
+    key: 'human-approval',
+    icon: 'how_to_reg',
+    label: 'Approvals',
+    description: 'Human review and approval workflows',
+    comingSoon: true,
+  },
+  {
+    key: 'api-integration',
+    icon: 'api',
+    label: 'Integrations',
+    description: 'External API connections and marketplace sync',
+    comingSoon: true,
+  },
+  {
+    key: 'admin',
+    icon: 'admin_panel_settings',
+    label: 'Admin',
+    description: 'System administration and user management',
     comingSoon: true,
   },
 ];
