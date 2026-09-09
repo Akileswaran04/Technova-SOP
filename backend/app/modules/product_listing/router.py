@@ -49,29 +49,32 @@ async def get_product(
 async def update_product(
     product_id: int,
     data: ProductUpdate,
+    user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Update a product."""
-    return await service.update_product(product_id, data)
+    """Update a product — owner only."""
+    return await service.update_product(int(user_id), product_id, data)
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
     product_id: int,
+    user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Delete a product."""
-    await service.delete_product(product_id)
+    """Delete a product — owner only."""
+    await service.delete_product(int(user_id), product_id)
 
 
 @router.patch("/{product_id}/stock", response_model=ProductResponse)
 async def adjust_stock(
     product_id: int,
     data: StockUpdate,
+    user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Adjust product stock by delta amount."""
-    return await service.adjust_stock(product_id, data.delta)
+    """Adjust product stock by delta amount — owner only."""
+    return await service.adjust_stock(int(user_id), product_id, data.delta)
 
 
 @router.post("/{product_id}/like", response_model=LikeResponse)
@@ -90,7 +93,7 @@ async def list_reviews(
     product_id: int,
     service: ProductService = Depends(get_product_service),
 ):
-    """List reviews for a product."""
+    """List reviews for a product (public)."""
     return await service.get_reviews(product_id)
 
 
@@ -98,17 +101,20 @@ async def list_reviews(
 async def add_review(
     product_id: int,
     data: ReviewCreate,
+    user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Add a review to a product."""
-    return await service.add_review(product_id, data)
+    """Add a review to a product — buyer role."""
+    return await service.add_review(int(user_id), product_id, data)
 
 
-@router.put("/reviews/{review_id}/reply", response_model=ReviewResponse)
+@router.put("/{product_id}/reviews/{review_id}/reply", response_model=ReviewResponse)
 async def reply_to_review(
+    product_id: int,
     review_id: int,
     data: ReviewReply,
+    user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Seller reply to a review."""
-    return await service.reply_to_review(review_id, data)
+    """Seller reply to a review — owner only."""
+    return await service.reply_to_review(int(user_id), review_id, data)

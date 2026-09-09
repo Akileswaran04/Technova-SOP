@@ -108,6 +108,19 @@ class SellerProfileService:
         updated = await self.profile_repo.update_status(
             profile.id, SellerProfileStatus.SUBMITTED.value
         )
+
+        # Create a verification record so the admin review queue (admin module)
+        # has something to review against. Required bridge between the existing
+        # seller flow and the admin module.
+        await self.verification_repo.create(
+            seller_id=profile.id,
+            data={
+                "verification_type": "business_license",
+                "document_reference": profile.license_number,
+                "status": "pending",
+            },
+        )
+
         return updated
 
     async def update_status(self, profile_id: int, status_update: StatusUpdateRequest) -> dict:

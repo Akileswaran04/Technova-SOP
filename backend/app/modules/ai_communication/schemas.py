@@ -6,6 +6,21 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
+class SentimentRequest(BaseModel):
+    """Analyze a message's sentiment and intent."""
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
+class SentimentResponse(BaseModel):
+    """Sentiment/intent analysis result."""
+    label: str
+    score: float
+    intent: str
+    lead_score: int
+    strategy: str
+    draft: str
+
+
 class AIInteractionCreate(BaseModel):
     """Log an AI interaction."""
     conversation_id: Optional[int] = None

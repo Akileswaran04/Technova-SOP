@@ -2,10 +2,11 @@
 TECHNOVA Backend — AI-Powered Digital Business Ecosystem for MSMEs.
 
 Architecture:
-- PostgreSQL: Core business data (users, sellers, products, orders, reviews, analytics)
-- MongoDB: High-volume communication data (conversations, messages, AI logs)
-- Redis: Real-time features (online status, caching, pub/sub)
+- PostgreSQL: Core business data (users, sellers, buyers, products, orders, payments, transactions, analytics)
+- MongoDB: High-volume communication data (conversations, messages, AI drafts)
+- Redis: Real-time features (online status, typing, unread, pub/sub, cache)
 """
+import asyncio
 import logging
 
 from fastapi import FastAPI
@@ -14,19 +15,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-from app.core.exceptions import TechnovaException, NotFoundException, ConflictException, ValidationException, UnauthorizedException, ForbiddenException
+from app.core.exceptions import (
+    TechnovaException, NotFoundException, ConflictException,
+    ValidationException, UnauthorizedException, ForbiddenException,
+)
 from app.infrastructure.mongodb import MongoDBClient
+from app.infrastructure.mongodb.chat import ensure_chat_indexes
 from app.infrastructure.redis import RedisClient
 from app.modules.seller_profile.router import router as seller_profile_router
+from app.modules.buyer_profile.router import router as buyer_profile_router
 from app.modules.product_listing.router import router as product_listing_router
 from app.modules.unified_inbox.router import router as unified_inbox_router
+from app.modules.unified_inbox.ws import router as ws_router
+from app.modules.unified_inbox.ws import start_realtime_forwarder, stop_realtime_forwarder
 from app.modules.buyer_discovery.router import router as buyer_discovery_router
+from app.modules.buyer_discovery.discovery_router import router as discovery_router
 from app.modules.ai_communication.router import router as ai_communication_router
+from app.modules.human_approval.router import router as human_approval_router
+from app.modules.orders.router import router as orders_router
+from app.modules.payments.router import router as payments_router
+from app.modules.analytics.router import router as analytics_router
+from app.modules.admin.router import router as admin_router
 from app.modules.authentication.router import router as auth_router
+from app.modules.analytics.worker import compute_all
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
+
+ANALYTICS_INTERVAL_SECONDS = 5 * 60  # recompute summaries every 5 minutes
 
 
 def create_app() -> FastAPI:
@@ -63,11 +80,14 @@ def create_app() -> FastAPI:
     async def forbidden_handler(request: Request, exc: ForbiddenException):
         return JSONResponse(status_code=403, content={"detail": str(exc)})
 
+    @app.exception_handler(TechnovaException)
+    async def technova_handler(request: Request, exc: TechnovaException):
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
     # ============================================
     # Middleware
     # ============================================
 
-    # CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -77,51 +97,53 @@ def create_app() -> FastAPI:
     )
 
     # ============================================
-    # Startup Event
+    # Lifecycle
     # ============================================
+
+    analytics_task = None
 
     @app.on_event("startup")
     async def startup_event():
-        """Initialize database connections and services."""
+        """Initialize database connections, indexes, and background workers."""
         logger.info("Starting TECHNOVA Backend...")
 
-        # PostgreSQL is initialized through SQLAlchemy session
-        # (configured in infrastructure/postgres/session.py)
-        logger.info("PostgreSQL connection pool initialized")
-
-        # MongoDB connection
+        # MongoDB connection + chat indexes
         try:
             await MongoDBClient.connect_to_db()
+            await ensure_chat_indexes()
             logger.info("MongoDB connected successfully")
         except Exception as e:
             logger.warning(f"MongoDB connection failed (optional service): {str(e)}")
 
-        # Redis connection
+        # Redis connection + realtime forwarder
         try:
             await RedisClient.connect_to_redis()
+            start_realtime_forwarder()
             logger.info("Redis connected successfully")
         except Exception as e:
             logger.warning(f"Redis connection failed (optional service): {str(e)}")
 
-        logger.info("TECHNOVA Backend startup complete")
+        # Background analytics worker (aggregates, never per-request)
+        global analytics_task
+        analytics_task = asyncio.create_task(_analytics_loop())
 
-    # ============================================
-    # Shutdown Event
-    # ============================================
+        logger.info("TECHNOVA Backend startup complete")
 
     @app.on_event("shutdown")
     async def shutdown_event():
-        """Clean up database connections."""
+        """Clean up connections and background tasks."""
         logger.info("Shutting down TECHNOVA Backend...")
 
-        # Close MongoDB
+        if analytics_task is not None:
+            analytics_task.cancel()
+        stop_realtime_forwarder()
+
         try:
             await MongoDBClient.close_connection()
             logger.info("MongoDB connection closed")
         except Exception as e:
             logger.error(f"Error closing MongoDB: {str(e)}")
 
-        # Close Redis
         try:
             await RedisClient.close_connection()
             logger.info("Redis connection closed")
@@ -130,11 +152,19 @@ def create_app() -> FastAPI:
 
         logger.info("TECHNOVA Backend shutdown complete")
 
+    async def _analytics_loop():
+        """Periodically recompute analytics summaries + trust scores."""
+        while True:
+            try:
+                await compute_all()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Analytics worker iteration failed: %s", exc)
+            await asyncio.sleep(ANALYTICS_INTERVAL_SECONDS)
+
     # ============================================
     # API Routes
     # ============================================
 
-    # Health check
     @app.get("/api/v1/health")
     async def health_check():
         """System health check endpoint."""
@@ -149,81 +179,20 @@ def create_app() -> FastAPI:
     # Module Routers
     # ============================================
 
-    # Seller Profile Module
-    app.include_router(seller_profile_router, prefix="/api/v1/sellers", tags=["Seller Profile"])
-
-    # Product Listing Module
-    app.include_router(product_listing_router, prefix="/api/v1/products", tags=["Product Listing"])
-
-    # Unified Inbox Module
-    app.include_router(unified_inbox_router, prefix="/api/v1/conversations", tags=["Unified Inbox"])
-
-    # Buyer Discovery Module
-    app.include_router(buyer_discovery_router, prefix="/api/v1/customers", tags=["Buyer Discovery"])
-
-    # AI Communication Module
-    app.include_router(ai_communication_router, prefix="/api/v1/ai", tags=["AI Communication"])
-
-    # Authentication Module
     app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
-
-    # ============================================
-    # API Documentation Sections
-    # ============================================
-
-    @app.get("/api/v1/docs/architecture")
-    async def get_architecture_docs():
-        """Get architecture documentation."""
-        return {
-            "name": "TECHNOVA Architecture",
-            "version": "1.0.0",
-            "databases": {
-                "PostgreSQL": {
-                    "purpose": "Core business data",
-                    "url": settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "configured",
-                    "tables": [
-                        "users",
-                        "seller_profiles",
-                        "seller_verifications",
-                        "buyer_profiles",
-                        "products",
-                        "product_reviews",
-                        "orders",
-                        "order_items",
-                        "transactions",
-                        "reviews",
-                        "trust_scores",
-                        "analytics",
-                        "audit_logs",
-                        "conversations",
-                        "messages",
-                        "customers",
-                        "ai_interactions",
-                    ],
-                },
-                "MongoDB": {
-                    "purpose": "High-volume communication data",
-                    "status": "Optional - for future modules",
-                    "collections": ["conversations", "messages", "ai_interactions", "notification_queue"],
-                },
-                "Redis": {
-                    "purpose": "Real-time features and caching",
-                    "status": "Optional - for real-time features",
-                    "use_cases": ["online_status", "typing_indicators", "cache", "pub_sub"],
-                },
-            },                "modules": {
-                "seller_profile": "IMPLEMENTED",
-                "product_listing": "IMPLEMENTED",
-                "unified_inbox": "IMPLEMENTED",
-                "buyer_discovery": "IMPLEMENTED",
-                "ai_communication": "IMPLEMENTED",
-                "authentication": "PLANNED",
-                "human_approval": "PLANNED",
-                "analytics": "PLANNED",
-                "api_integration": "PLANNED",
-                "admin": "PLANNED",
-            },
-        }
+    app.include_router(seller_profile_router, prefix="/api/v1/sellers", tags=["Seller Profile"])
+    app.include_router(buyer_profile_router, prefix="/api/v1/buyers", tags=["Buyer Profile"])
+    app.include_router(product_listing_router, prefix="/api/v1/products", tags=["Product Listing"])
+    app.include_router(unified_inbox_router, prefix="/api/v1/conversations", tags=["Unified Inbox"])
+    app.include_router(discovery_router, prefix="/api/v1", tags=["Buyer Discovery"])
+    app.include_router(buyer_discovery_router, prefix="/api/v1/customers", tags=["Customer Management"])
+    app.include_router(ai_communication_router, prefix="/api/v1/ai", tags=["AI Communication"])
+    app.include_router(human_approval_router, prefix="/api/v1", tags=["Human Approval"])
+    app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
+    app.include_router(payments_router, prefix="/api/v1", tags=["Payments"])
+    app.include_router(analytics_router, prefix="/api/v1/analytics", tags=["Analytics"])
+    app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
+    app.include_router(ws_router)  # /ws/chat
 
     return app
 

@@ -1,0 +1,169 @@
+"""
+Analytics background worker — aggregates per-seller metrics.
+
+Runs periodically (started from main.py), never on every request. Writes into
+`analytics` (summary) and `trust_scores` tables. Chat response-time is read
+from MongoDB (messages collection), the rest from PostgreSQL.
+"""
+import logging
+from datetime import datetime
+
+from sqlalchemy import select, func, delete, cast
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.infrastructure.postgres.database import AsyncSessionLocal
+from app.infrastructure.mongodb.chat import get_messages_collection, get_conversations_collection
+from app.modules.seller_profile.models import SellerProfile
+from app.modules.orders.models import Order, orderstatus_enum
+from app.modules.orders.models import Review
+from app.modules.analytics.models import AnalyticsSummary, TrustScore
+
+logger = logging.getLogger(__name__)
+
+
+async def _compute_seller_metrics(db: AsyncSession, seller_id: int) -> dict:
+    """Aggregate order/review metrics for one seller."""
+    orders_result = await db.execute(
+        select(
+            func.count(Order.id),
+            func.coalesce(func.sum(Order.total_amount), 0),
+            func.count(func.nullif(Order.status, cast("cancelled", orderstatus_enum))),
+        ).where(Order.seller_id == seller_id)
+    )
+    total_orders, total_revenue, successful_orders = orders_result.one()
+
+    cancelled_result = await db.execute(
+        select(func.count(Order.id)).where(
+            Order.seller_id == seller_id,
+            Order.status == cast("cancelled", orderstatus_enum),
+        )
+    )
+    cancelled = cancelled_result.scalar() or 0
+
+    reviews_result = await db.execute(
+        select(func.avg(Review.rating)).where(Review.seller_id == seller_id)
+    )
+    avg_rating = reviews_result.scalar()
+    avg_rating = float(avg_rating) if avg_rating is not None else 0.0
+
+    # Response time: from MongoDB messages — avg gap between buyer msg and next seller reply
+    response_time_avg = await _compute_response_time(seller_id)
+
+    total_orders = total_orders or 0
+    total_revenue = float(total_revenue or 0.0)
+    successful_orders = successful_orders or 0
+    average_order_value = round(total_revenue / successful_orders, 2) if successful_orders else 0.0
+    cancellation_rate = round(cancelled / total_orders, 3) if total_orders else 0.0
+    conversion_rate = round(successful_orders / max(total_orders, 1), 3)
+
+    # Trust score: reviews + order health + verification
+    review_score = round((avg_rating or 0) * 20, 1)  # 5 stars → 100
+    compliance_score = 70.0  # placeholder until verification documents are scored
+    communication_score = 60.0 if response_time_avg is None else max(0, round(100 - response_time_avg / 60, 1))
+    overall = round(
+        0.4 * review_score + 0.2 * compliance_score + 0.2 * communication_score
+        + 0.2 * (100 * (1 - cancellation_rate)),
+        1,
+    )
+
+    return {
+        "total_orders": total_orders,
+        "total_revenue": total_revenue,
+        "average_order_value": average_order_value,
+        "conversion_rate": conversion_rate,
+        "response_time_avg": round(response_time_avg, 1) if response_time_avg else None,
+        "cancelled": cancelled,
+        "successful_orders": successful_orders,
+        "cancellation_rate": cancellation_rate,
+        "review_score": review_score,
+        "communication_score": communication_score,
+        "overall_score": overall,
+    }
+
+
+async def _compute_response_time(seller_id: int):
+    """Average seconds between a buyer message and the seller's reply."""
+    try:
+        messages = await get_messages_collection()
+        convos = await get_conversations_collection()
+        convos = await (
+            convos.find({"sellerId": seller_id}, {"_id": 1})
+            .to_list(length=1000)
+        )
+        convo_ids = [c["_id"] for c in convos]
+        if not convo_ids:
+            return None
+
+        docs = await (
+            messages.find({"conversationId": {"$in": convo_ids}})
+            .sort([("createdAt", 1)])
+            .to_list(length=5000)
+        )
+        gaps = []
+        for prev, cur in zip(docs, docs[1:]):
+            if prev.get("senderType") == "buyer" and cur.get("senderType") == "seller":
+                try:
+                    delta = (cur["createdAt"] - prev["createdAt"]).total_seconds()
+                    if 0 < delta < 60 * 60 * 24 * 7:  # ignore >1 week gaps
+                        gaps.append(delta)
+                except (TypeError, KeyError):
+                    continue
+        if not gaps:
+            return None
+        return sum(gaps) / len(gaps)
+    except Exception as exc:  # noqa: BLE001 — Mongo optional for analytics
+        logger.warning("Response-time computation failed: %s", exc)
+        return None
+
+
+async def compute_for_seller(seller_id: int) -> None:
+    """Compute and persist analytics + trust score for one seller."""
+    async with AsyncSessionLocal() as db:
+        try:
+            metrics = await _compute_seller_metrics(db, seller_id)
+
+            # Upsert analytics summary (keep one row per seller)
+            await db.execute(
+                delete(AnalyticsSummary).where(AnalyticsSummary.seller_id == seller_id)
+            )
+            summary = AnalyticsSummary(
+                seller_id=seller_id,
+                date=datetime.utcnow(),
+                total_orders=metrics["total_orders"],
+                total_revenue=metrics["total_revenue"],
+                average_order_value=metrics["average_order_value"],
+                conversion_rate=metrics["conversion_rate"],
+                response_time_avg=metrics["response_time_avg"],
+                total_sales=metrics["total_revenue"],
+            )
+            db.add(summary)
+
+            # Upsert trust score
+            existing = await db.execute(
+                select(TrustScore).where(TrustScore.seller_id == seller_id)
+            )
+            trust = existing.scalar_one_or_none()
+            if trust is None:
+                trust = TrustScore(seller_id=seller_id)
+                db.add(trust)
+            trust.overall_score = metrics["overall_score"]
+            trust.review_score = metrics["review_score"]
+            trust.communication_score = metrics["communication_score"]
+            trust.successful_orders = metrics["successful_orders"]
+            trust.cancellation_rate = metrics["cancellation_rate"]
+            trust.last_updated = datetime.utcnow()
+
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception("Analytics computation failed for seller %s", seller_id)
+
+
+async def compute_all() -> None:
+    """Run analytics + trust score computation for every seller."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(SellerProfile.id))
+        seller_ids = [row[0] for row in result.all()]
+    logger.info("Computing analytics for %d sellers", len(seller_ids))
+    for seller_id in seller_ids:
+        await compute_for_seller(seller_id)

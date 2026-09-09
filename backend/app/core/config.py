@@ -1,9 +1,16 @@
 """
 Application configuration — environment variables loaded from .env.
+
+The project .env is authoritative: we load it with override=True so a stale
+DATABASE_URL/MONGODB_URL/REDIS_URL in the process environment can't silently
+win over the checked-in local config.
 """
 
 from typing import List
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+load_dotenv(override=True)
 
 
 class Settings(BaseSettings):

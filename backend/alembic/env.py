@@ -20,6 +20,11 @@ from app.modules.seller_profile.models import (  # noqa: F401
     Customer,
     AIInteraction,
 )
+from app.modules.buyer_profile.models import BuyerProfile  # noqa: F401
+from app.modules.orders.models import Order, OrderItem, Review  # noqa: F401
+from app.modules.payments.models import Payment, Transaction  # noqa: F401
+from app.modules.analytics.models import TrustScore, AnalyticsSummary  # noqa: F401
+from app.modules.admin.models import AuditLog  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
@@ -30,7 +35,9 @@ target_metadata = Base.metadata
 # Override sqlalchemy.url from environment
 import os
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+# .env is authoritative — override stale process-env vars (e.g. a broken
+# DATABASE_URL left over from a previous session)
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), override=True)
 database_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
 config.set_main_option("sqlalchemy.url", database_url)
 

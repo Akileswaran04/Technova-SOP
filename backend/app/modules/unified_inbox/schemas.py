@@ -1,78 +1,66 @@
-"""Pydantic schemas for unified inbox module."""
+"""Pydantic schemas for unified inbox (MongoDB-backed chat)."""
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Literal
 
 
 from pydantic import BaseModel, Field
 
 
-# ── Message Schemas ──
-
-class MessageCreate(BaseModel):
-    """Create a new message."""
-    sender_type: str = Field(..., pattern="^(seller|customer|ai)$")
-    sender_name: Optional[str] = None
-    text: str = Field(..., min_length=1)
-    is_ai_generated: bool = False
-    order_data: Optional[dict] = None
-
-
-class MessageResponse(BaseModel):
-    """Message response."""
-    id: int
-    conversation_id: int
-    sender_type: str
-    sender_name: Optional[str]
-    text: str
-    is_ai_generated: bool
-    order_data: Optional[Any]
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# ── Conversation Schemas ──
-
 class ConversationCreate(BaseModel):
-    """Create a new conversation."""
-    customer_name: str = Field(..., min_length=1, max_length=255)
-    customer_phone: Optional[str] = None
-    customer_email: Optional[str] = None
-    order_tag: Optional[str] = None
-
-
-class ConversationUpdate(BaseModel):
-    """Update conversation metadata."""
-    customer_name: Optional[str] = None
-    customer_phone: Optional[str] = None
-    customer_email: Optional[str] = None
-    order_tag: Optional[str] = None
+    """Open (or reuse) a conversation with a buyer."""
+    buyer_id: int = Field(..., description="Existing buyer profile id")
 
 
 class ConversationResponse(BaseModel):
-    """Conversation response with last message info."""
-    id: int
+    """Conversation summary."""
+    id: str
     seller_id: int
-    customer_name: str
-    customer_phone: Optional[str]
-    customer_email: Optional[str]
-    last_message: Optional[str]
-    last_message_at: Optional[datetime]
-    unread_count: int
-    order_tag: Optional[str]
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    buyer_id: int
+    customer_name: Optional[str] = None
+    last_message: Optional[str] = None
+    last_message_at: Optional[datetime] = None
+    unread_count: int = 0
+    status: str = "active"
+    created_at: Optional[datetime] = None
 
 
-class ConversationDetailResponse(ConversationResponse):
-    """Conversation with full message history."""
-    messages: List[MessageResponse] = []
+class MessageCreate(BaseModel):
+    """Send a message in a conversation."""
+    content: str = Field(..., min_length=1, max_length=4000)
+    message_type: Literal["text", "attachment"] = "text"
+    source: Literal["in_app", "gmail", "outlook"] = "in_app"
+    client_message_id: Optional[str] = Field(
+        None, description="Client-generated id for idempotent sends (retries don't duplicate)"
+    )
+    attachments: List[str] = Field(default_factory=list)
 
 
-class UnreadCountResponse(BaseModel):
-    """Total unread count for a seller."""
-    total: int
+class MessageResponse(BaseModel):
+    """Message document."""
+    id: str
+    conversation_id: str
+    sender_id: int
+    sender_type: str  # seller | buyer
+    sender_name: Optional[str] = None
+    content: str
+    message_type: str = "text"
+    source: str = "in_app"
+    sentiment: Optional[dict] = None
+    sequence_number: int
+    attachments: List[str] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
+    is_ai_generated: bool = False
+
+
+class MessagePage(BaseModel):
+    """Cursor-paginated messages page."""
+    items: List[MessageResponse]
+    next_cursor: Optional[str] = None
+    limit: int
+
+
+class TypingEvent(BaseModel):
+    """Typing indicator payload."""
+    conversation_id: str
+    is_typing: bool

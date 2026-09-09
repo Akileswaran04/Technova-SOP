@@ -8,10 +8,18 @@ from app.core.dependencies import get_current_user_id
 from app.modules.ai_communication.dependencies import get_ai_communication_service
 from app.modules.ai_communication.schemas import (
     AIInteractionCreate, AIInteractionResponse, AIStatsResponse,
+    SentimentRequest, SentimentResponse,
 )
 from app.modules.ai_communication.service import AICommunicationService
+from app.modules.ai_communication.sentiment import analyze_message
 
 router = APIRouter()
+
+
+@router.post("/analyze", response_model=SentimentResponse)
+async def analyze(data: SentimentRequest):
+    """Run sentiment/intent analysis on a message (in-app or synced email alike)."""
+    return analyze_message(data.content)
 
 
 @router.get("/interactions", response_model=List[AIInteractionResponse])

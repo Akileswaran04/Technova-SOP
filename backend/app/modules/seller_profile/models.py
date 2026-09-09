@@ -45,6 +45,7 @@ class User(Base):
 
     # Relationships
     seller_profile = relationship("SellerProfile", back_populates="user", uselist=False)
+    buyer_profile = relationship("BuyerProfile", back_populates="user", uselist=False)
 
 
 class SellerProfile(Base):
@@ -96,7 +97,7 @@ class SellerVerification(Base):
     verification_type = Column(verificationtype_enum, nullable=False)
     document_reference = Column(String(500), nullable=True)
     status = Column(verificationstatus_enum, nullable=False, default="pending")
-    reviewed_by = Column(String(254), nullable=True)
+    reviewed_by = Column(Integer, nullable=True)  # users.id of the reviewer
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(Text, nullable=True)
 
@@ -120,6 +121,7 @@ class Product(Base):
     seller_id = Column(Integer, ForeignKey("seller_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    category = Column(String(100), nullable=False, default="general")
     price = Column(Float, nullable=False)
     image_url = Column(Text, nullable=True)
     stock = Column(Integer, nullable=False, default=0)

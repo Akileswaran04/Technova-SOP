@@ -1,11 +1,11 @@
 /**
- * ChatView — right panel of the inbox with NeuroChat AI auto-reply.
- * WhatsApp-style chat with AI draft generation, approval flow, and auto-reply toggle.
- * All data operations go through backend API.
+ * ChatView — right panel of the inbox with AI draft + human approval flow.
+ * AI drafts come from the backend (ai_communication + human_approval modules);
+ * a draft is NEVER auto-sent — the seller reviews/edits and approves it.
+ * All data operations go through the backend API.
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { getConversationById, sendMessage, markAsRead } from '../../../services/storage';
-import { analyzeMessage } from '../../ai-communication/services/aiEngine';
+import { getConversationById, sendMessage, markAsRead, generateDraft, editDraft, sendDraft } from '../../../services/storage';
 import AIDraft from '../../ai-communication/components/AIDraft';
 import AutoReplyToggle from '../../ai-communication/components/AutoReplyToggle';
 
@@ -20,7 +20,6 @@ function formatDateDivider(timestamp) {
   const date = new Date(timestamp);
   const now = new Date();
   const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -33,44 +32,10 @@ function shouldShowDateDivider(messages, index) {
   return curr !== prev;
 }
 
-function OrderCard({ order }) {
-  return (
-    <div className="bg-surface-container-low border border-outline-variant rounded-lg p-3 max-w-[280px]">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="material-symbols-outlined text-[18px] text-primary">receipt_long</span>
-        <span className="text-label-md text-on-surface font-semibold">Order #{order.id?.slice(-6).toUpperCase()}</span>
-      </div>
-      {order.items?.map((item, i) => (
-        <div key={i} className="flex justify-between text-label-sm text-on-surface-variant py-0.5">
-          <span>{item.name} × {item.qty}</span>
-          <span className="font-medium text-on-surface">₹{item.total?.toLocaleString('en-IN')}</span>
-        </div>
-      ))}
-      {order.total && (
-        <div className="flex justify-between text-label-md text-on-surface font-bold mt-2 pt-2 border-t border-outline-variant">
-          <span>Total</span>
-          <span>₹{order.total.toLocaleString('en-IN')}</span>
-        </div>
-      )}
-      {order.status && (
-        <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-label-sm font-medium ${
-          order.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' :
-          order.status === 'pending' ? 'bg-amber-100 text-amber-800' :
-          order.status === 'delivered' ? 'bg-blue-100 text-blue-800' :
-          'bg-surface-container text-on-surface-variant'
-        }`}>
-          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-        </span>
-      )}
-    </div>
-  );
-}
-
 function MessageBubble({ message, isSeller }) {
   return (
     <div className={`flex ${isSeller ? 'justify-end' : 'justify-start'} mb-1`}>
-      <div className={`max-w-[75%] sm:max-w-[60%]`}>
-        {message.order && <OrderCard order={message.order} />}
+      <div className="max-w-[75%] sm:max-w-[60%]">
         {message.text && (
           <div
             className={`px-3.5 py-2.5 text-body-md leading-relaxed ${
@@ -96,6 +61,13 @@ function MessageBubble({ message, isSeller }) {
   );
 }
 
+// Map backend sentiment to the AIDraft UI's emotion/strategy config
+const emotionMap = { positive: 'Excited', negative: 'Frustrated', neutral: 'Neutral' };
+const strategyMap = {
+  inform: 'Educational', empathize: 'Reassurance', engage: 'Social Proof',
+  acknowledge: 'Social Proof', respond: 'Educational',
+};
+
 export default function ChatView({ conversationId, sellerId, onBack, onRefresh, onToast }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -103,11 +75,18 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
   const [convo, setConvo] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // AI Auto-Reply state
+  // AI Auto-Reply state — approval flow only (never auto-sends)
   const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiMode, setAiMode] = useState('approval');
   const [aiDraft, setAiDraft] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const reload = useCallback(async () => {
+    const data = await getConversationById(conversationId);
+    if (data) {
+      setConvo(data);
+      if (data.unreadCount > 0) await markAsRead(conversationId);
+    }
+  }, [conversationId]);
 
   // Load conversation
   useEffect(() => {
@@ -116,7 +95,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
       try {
         const data = await getConversationById(conversationId);
         if (!cancelled) setConvo(data);
-        // Mark as read
         if (data?.unreadCount > 0) {
           await markAsRead(conversationId);
         }
@@ -134,69 +112,99 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [convo?.messages?.length]);
 
-  // Auto-generate AI draft when a new customer message arrives
+  // Auto-generate AI draft (backend) when a new buyer message arrives
   useEffect(() => {
     if (!aiEnabled || !convo?.messages?.length) return;
-
     const lastMsg = convo.messages[convo.messages.length - 1];
     if (lastMsg.senderType === 'seller' || lastMsg.isAI) return;
 
+    let cancelled = false;
     setIsAnalyzing(true);
-
-    const timer = setTimeout(() => {
-      const analysis = analyzeMessage(lastMsg.text);
-      setAiDraft(analysis);
-      setIsAnalyzing(false);
-
-      if (aiMode === 'auto') {
-        handleSendAIResponse(analysis.response);
+    (async () => {
+      try {
+        const draft = await generateDraft(conversationId);
+        if (!cancelled) {
+          setAiDraft({
+            id: draft.id,
+            response: draft.draft_content,
+            emotion: emotionMap[draft.sentiment_label] || 'Neutral',
+            strategy: strategyMap[draft.intent] || 'Educational',
+            intent: draft.intent,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to generate AI draft:', err);
+      } finally {
+        if (!cancelled) setIsAnalyzing(false);
       }
-    }, 800);
+    })();
+    return () => { cancelled = true; };
+  }, [convo?.messages?.length, aiEnabled, conversationId]);
 
-    return () => clearTimeout(timer);
-  }, [convo?.messages?.length, aiEnabled, aiMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleSendRaw = useCallback(async (text) => {
+    await sendMessage(conversationId, { text, clientMessageId: `${Date.now()}-${Math.random().toString(36).slice(2)}` });
+    await reload();
+  }, [conversationId, reload]);
 
-  const handleSendAIResponse = useCallback(async (text) => {
-    if (!text) return;
-
-    try {
-      const result = await sendMessage(conversationId, {
-        senderType: 'seller',
-        text,
-        isAI: true,
-      });
-      // Reload conversation
-      const updated = await getConversationById(conversationId);
-      setConvo(updated);
+  const handleAcceptDraft = useCallback(async (text) => {
+    if (!aiDraft?.id) {
+      // Fallback: no backend draft — send as plain seller message
+      await handleSendRaw(text);
       setAiDraft(null);
-      onRefresh();
-    } catch (err) {
-      console.error('Failed to send AI response:', err);
+      onToast?.('AI response sent');
+      return;
     }
-  }, [conversationId, onRefresh]);
+    try {
+      const result = await sendDraft(aiDraft.id);
+      onToast?.('AI response approved and sent');
+    } catch (err) {
+      await handleSendRaw(text);
+      onToast?.('Sent (draft approval failed, sent as-is)');
+    }
+    setAiDraft(null);
+    await reload();
+    onRefresh?.();
+  }, [aiDraft, handleSendRaw, reload, onRefresh, onToast]);
 
-  const handleAcceptDraft = useCallback((text) => {
-    handleSendAIResponse(text);
-    onToast?.('AI response sent');
-  }, [handleSendAIResponse, onToast]);
+  const handleEditDraft = useCallback(async (editedText) => {
+    if (!aiDraft?.id) {
+      await handleSendRaw(editedText);
+      setAiDraft(null);
+      onToast?.('Edited response sent');
+      return;
+    }
+    try {
+      await editDraft(aiDraft.id, editedText);
+      await sendDraft(aiDraft.id);
+      onToast?.('Edited response approved and sent');
+    } catch (err) {
+      await handleSendRaw(editedText);
+      onToast?.('Sent (draft approval failed, sent as-is)');
+    }
+    setAiDraft(null);
+    await reload();
+    onRefresh?.();
+  }, [aiDraft, handleSendRaw, reload, onRefresh, onToast]);
 
-  const handleEditDraft = useCallback((editedText) => {
-    handleSendAIResponse(editedText);
-    onToast?.('Edited response sent');
-  }, [handleSendAIResponse, onToast]);
-
-  const handleRewriteDraft = useCallback(() => {
-    if (!aiDraft) return;
+  const handleRewriteDraft = useCallback(async () => {
+    if (!aiDraft?.id) return;
     setIsAnalyzing(true);
     setAiDraft(null);
-
-    setTimeout(() => {
-      const lastMsg = convo.messages[convo.messages.length - 1];
-      const analysis = analyzeMessage(lastMsg.text);
-      setAiDraft(analysis);
+    try {
+      const draft = await generateDraft(conversationId);
+      setAiDraft({
+        id: draft.id,
+        response: draft.draft_content,
+        emotion: emotionMap[draft.sentiment_label] || 'Neutral',
+        strategy: strategyMap[draft.intent] || 'Educational',
+        intent: draft.intent,
+      });
+    } catch (err) {
+      console.error('Failed to rewrite draft:', err);
+    } finally {
       setIsAnalyzing(false);
-    }, 600);
-  }, [aiDraft, convo]);
+    }
+  }, [aiDraft, conversationId]);
 
   const handleDismissDraft = useCallback(() => {
     setAiDraft(null);
@@ -205,14 +213,11 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
   const handleSend = async () => {
     const text = input.trim();
     if (!text) return;
-
     try {
-      await sendMessage(conversationId, { senderType: 'seller', text });
-      const updated = await getConversationById(conversationId);
-      setConvo(updated);
+      await handleSendRaw(text);
       setInput('');
       setAiDraft(null);
-      onRefresh();
+      onRefresh?.();
       inputRef.current?.focus();
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -255,22 +260,16 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
 
         <div className="flex-1 min-w-0">
           <h3 className="text-label-md text-on-surface font-semibold truncate">{convo.customerName}</h3>
-          <p className="text-label-sm text-on-surface-variant">
-            {convo.orderTag ? `Order: ${convo.orderTag}` : 'Customer'}
-          </p>
+          <p className="text-label-sm text-on-surface-variant">Customer</p>
         </div>
-
-        <button className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors">
-          <span className="material-symbols-outlined">more_vert</span>
-        </button>
       </div>
 
-      {/* AI Auto-Reply Toggle */}
+      {/* AI toggle — approval mode only, never auto-send */}
       <AutoReplyToggle
         enabled={aiEnabled}
         onToggle={setAiEnabled}
-        mode={aiMode}
-        onModeChange={setAiMode}
+        mode="approval"
+        onModeChange={() => {}}
       />
 
       {/* Messages area */}
@@ -298,7 +297,7 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
             {isAnalyzing && (
               <div className="flex items-center gap-2 px-4 py-2 text-label-sm text-primary">
                 <span className="material-symbols-outlined text-[16px] animate-pulse">auto_awesome</span>
-                <span>NeuroChat is analyzing sentiment...</span>
+                <span>AI is drafting a reply for your approval...</span>
               </div>
             )}
 
@@ -307,8 +306,8 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
         )}
       </div>
 
-      {/* AI Draft Panel */}
-      {aiDraft && aiMode === 'approval' && (
+      {/* AI Draft Panel — seller reviews/edits/approves */}
+      {aiDraft && (
         <AIDraft
           draft={aiDraft}
           onAccept={handleAcceptDraft}
@@ -320,18 +319,13 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
 
       {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3 border-t border-outline-variant bg-surface-container-lowest flex-shrink-0">
-        <button className="p-2.5 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors flex-shrink-0"
-          title="Quick reply templates">
-          <span className="material-symbols-outlined text-[22px]">add_circle</span>
-        </button>
-
         <div className="flex-1 relative">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={aiEnabled ? "Type a message (AI will draft a reply)..." : "Type a message..."}
+            placeholder={aiEnabled ? "Type a message (AI will draft a reply for approval)..." : "Type a message..."}
             rows={1}
             className="w-full px-4 py-2.5 rounded-2xl border border-outline-variant bg-surface text-on-surface text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors resize-none max-h-32"
             style={{ minHeight: '42px' }}

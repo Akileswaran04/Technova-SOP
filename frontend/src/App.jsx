@@ -1,7 +1,7 @@
 /**
- * App.jsx — Seller Dashboard single-page application.
- * MD3 theme: tonal surfaces, Material icons, Inter font.
- * Data loaded from PostgreSQL backend via API.
+ * App.jsx — role-based entry point.
+ * Single identity, single login: role comes from the JWT and routes the user
+ * to the seller dashboard or the buyer app automatically.
  */
 import { useState, useCallback, useEffect } from 'react';
 import { clearSession, getSession, getSellerById, getProductsBySeller, updateSeller, getTotalUnread } from './services/storage';
@@ -16,12 +16,18 @@ import { InboxTab } from './modules/unified-inbox';
 import { CustomerList } from './modules/buyer-discovery';
 import { ProfileForm } from './modules/seller-profile';
 import { AnalyticsTab } from './modules/analytics';
+import BuyerApp from './modules/buyer/BuyerApp';
 import Toast from './components/shared/Toast';
-import { getActiveModules } from './modules/MODULES';
 import './index.css';
 
 export default function App() {
   const session = getSession();
+  const [sessionRole, setSessionRole] = useState(session?.role || null);
+
+  // Buyer app — routed automatically by JWT role
+  if (sessionRole === 'buyer') {
+    return <BuyerApp onLogout={() => setSessionRole(null)} />;
+  }
   const [seller, setSeller] = useState(null);
   const [loading, setLoading] = useState(!!session?.token);
   const [activeTab, setActiveTab] = useState('products');
@@ -74,8 +80,12 @@ export default function App() {
     setToast({ message, type });
   }, []);
 
-  const handleLogin = useCallback(async (sellerData) => {
-    // sellerData comes from LoginScreen after successful API login
+  const handleLogin = useCallback(async (loginData) => {
+    // loginData comes from LoginScreen after successful API login
+    if (loginData?.role === 'buyer') {
+      setSessionRole('buyer');
+      return;
+    }
     setLoading(true);
     try {
       const profile = await getSellerById();
@@ -96,6 +106,7 @@ export default function App() {
     setSeller(null);
     setProducts([]);
     setActiveTab('products');
+    setSessionRole(null);
   }, []);
 
   const handleOnboardingComplete = useCallback(async (data) => {

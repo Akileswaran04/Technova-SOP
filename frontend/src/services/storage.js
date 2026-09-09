@@ -1,10 +1,12 @@
 /**
  * Storage service — centralized API communication.
  *
- * All data is now stored in PostgreSQL via the backend API.
- * Session token is kept in localStorage for persistence across page reloads.
+ * Single identity, single login: role is chosen once at registration and
+ * carried in the JWT. Sellers see the seller dashboard; buyers see the
+ * buyer app (discover / chat / orders / profile).
  *
- * Every function is now async. Components must use async/await or .then().
+ * All data lives in the backend: PostgreSQL (identity, products, orders,
+ * payments, analytics), MongoDB (conversations/messages), Redis (realtime).
  */
 import api from '../utils/api';
 
@@ -20,10 +22,17 @@ export function getSession() {
 }
 
 export function setSession(data) {
-  localStorage.setItem('technova_session', JSON.stringify(data));
-  if (data?.token) {
-    localStorage.setItem('technova_token', data.token);
-  }
+  const session = {
+    token: data.access_token || data.token,
+    role: data.role || data.role || 'seller',
+    sellerId: data.seller_id || null,
+    buyerId: data.buyer_id || null,
+    email: data.email,
+    fullName: data.full_name || data.fullName,
+  };
+  localStorage.setItem('technova_session', JSON.stringify(session));
+  if (session.token) localStorage.setItem('technova_token', session.token);
+  return session;
 }
 
 export function clearSession() {
@@ -31,34 +40,39 @@ export function clearSession() {
   localStorage.removeItem('technova_token');
 }
 
-// ── Auth ──
+// ── Auth (role picked once, at registration) ──
 
-export async function registerSeller(data) {
+export async function registerUser(data) {
   const result = await api.post('/auth/register', data);
-  setSession({ token: result.access_token, sellerId: result.seller_id, email: result.email, fullName: result.full_name });
-  return result;
+  return setSession(result);
 }
 
-export async function loginSeller(identifier, password) {
+export async function loginUser(identifier, password) {
   const result = await api.post('/auth/login', { identifier, password });
-  setSession({ token: result.access_token, sellerId: result.seller_id, email: result.email, fullName: result.full_name });
-  return result;
+  return setSession(result);
+}
+
+// Aliases kept for existing screens
+export const registerSeller = registerUser;
+export const loginSeller = loginUser;
+
+export async function logoutUser() {
+  try { await api.post('/auth/logout'); } catch { /* stateless JWT */ }
+  clearSession();
 }
 
 export async function getCurrentUser() {
   return await api.get('/auth/me');
 }
 
-// ── Sellers / Profile ──
+// ── Seller profile ──
 
-export async function getSellerById(id) {
-  // Use auth/me to get current seller profile
+export async function getSellerById() {
   const data = await getCurrentUser();
   return data?.seller || null;
 }
 
 export async function updateSeller(id, updates) {
-  // Map frontend field names to backend field names
   const fieldMap = {
     storeName: 'business_name',
     category: 'business_type',
@@ -67,54 +81,47 @@ export async function updateSeller(id, updates) {
     email: 'email',
     address: 'address_line_1',
   };
-
   const payload = {};
   for (const [key, value] of Object.entries(updates)) {
     const backendKey = fieldMap[key] || key;
-    payload[backendKey] = value;
+    if (value !== undefined) payload[backendKey] = value;
   }
-
   return await api.put('/sellers/profile', payload);
 }
 
-// ── Products ──
+// ── Buyer profile ──
 
-export async function getProductsBySeller(sellerId) {
+export async function getBuyerById() {
+  const data = await getCurrentUser();
+  return data?.buyer || null;
+}
+
+export async function updateBuyer(id, updates) {
+  const payload = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) payload[key] = value;
+  }
+  return await api.put('/buyers/me', payload);
+}
+
+// ── Products (seller CRUD) ──
+
+export async function getProductsBySeller() {
   try {
     const products = await api.get('/products');
-    // Map backend response to frontend shape
-    return (products || []).map((p) => ({
-      id: p.id,
-      sellerId: p.seller_id,
-      name: p.name,
-      description: p.description,
-      price: p.price,
-      image: p.image_url,
-      stock: p.stock,
-      lowStockThreshold: p.low_stock_threshold,
-      likes: p.likes,
-      reviews: (p.reviews || []).map((r) => ({
-        id: r.id,
-        customerName: r.customer_name,
-        rating: r.rating,
-        comment: r.comment,
-        sellerReply: r.seller_reply,
-        date: r.created_at,
-      })),
-      createdAt: p.created_at,
-    }));
+    return (products || []).map(mapProduct);
   } catch {
     return [];
   }
 }
 
-export async function getProductById(id) {
-  const p = await api.get(`/products/${id}`);
-  return p ? {
+function mapProduct(p) {
+  return {
     id: p.id,
     sellerId: p.seller_id,
     name: p.name,
     description: p.description,
+    category: p.category,
     price: p.price,
     image: p.image_url,
     stock: p.stock,
@@ -129,33 +136,33 @@ export async function getProductById(id) {
       date: r.created_at,
     })),
     createdAt: p.created_at,
-  } : null;
+  };
+}
+
+export async function getProductById(id) {
+  const p = await api.get(`/products/${id}`);
+  return p ? mapProduct(p) : null;
 }
 
 export async function createProduct(data) {
-  const payload = {
+  return await api.post('/products', {
     name: data.name,
     description: data.description,
+    category: data.category || 'general',
     price: data.price,
     image_url: data.image,
     stock: data.stock || 0,
     low_stock_threshold: data.lowStockThreshold || 5,
-  };
-  return await api.post('/products', payload);
+  });
 }
 
 export async function updateProduct(id, updates) {
-  const fieldMap = {
-    image: 'image_url',
-    lowStockThreshold: 'low_stock_threshold',
-  };
-
+  const fieldMap = { image: 'image_url', lowStockThreshold: 'low_stock_threshold' };
   const payload = {};
   for (const [key, value] of Object.entries(updates)) {
     const backendKey = fieldMap[key] || key;
-    payload[backendKey] = value;
+    if (value !== undefined) payload[backendKey] = value;
   }
-
   return await api.put(`/products/${id}`, payload);
 }
 
@@ -163,34 +170,219 @@ export async function deleteProduct(id) {
   return await api.delete(`/products/${id}`);
 }
 
-// ── Customers ──
+// ── Discovery (buyer-facing search) ──
 
-export async function getCustomersBySeller(sellerId) {
-  try {
-    return await api.get('/customers');
-  } catch {
-    return [];
+export async function discover(params = {}) {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') qs.set(key, value);
   }
+  const query = qs.toString();
+  return await api.get(`/discover${query ? `?${query}` : ''}`);
+}
+
+export async function getSellerPublic(sellerId) {
+  return await api.get(`/sellers/${sellerId}`);
+}
+
+export async function getSellerPublicProducts(sellerId, cursor) {
+  const qs = cursor ? `?cursor=${cursor}` : '';
+  return await api.get(`/sellers/${sellerId}/products${qs}`);
+}
+
+// ── Customers (seller-side buyer discovery, unchanged API) ──
+
+export async function getCustomersBySeller() {
+  try { return await api.get('/customers'); } catch { return []; }
 }
 
 export async function createCustomer(data) {
-  const payload = {
-    name: data.name,
-    email: data.email || null,
-    phone: data.contact || null,
-  };
-  return await api.post('/customers', payload);
+  return await api.post('/customers', {
+    name: data.name, email: data.email || null, phone: data.contact || null,
+  });
 }
 
 export async function updateCustomer(id, updates) {
   const payload = {};
   if (updates.contact !== undefined) payload.phone = updates.contact;
   if (updates.name !== undefined) payload.name = updates.name;
-  if (updates.notes !== undefined) payload.email = updates.notes; // map notes -> email field
   return await api.put(`/customers/${id}`, payload);
 }
 
-// ── Derived: Trust Score ──
+// ── Conversations / Chat (MongoDB-backed) ──
+
+export async function getConversations() {
+  try {
+    const data = await api.get('/conversations');
+    return (data?.items || []).map((c) => ({
+      id: c.id,
+      sellerId: c.seller_id,
+      buyerId: c.buyer_id,
+      customerName: c.customer_name,
+      lastMessage: c.last_message,
+      lastMessageTime: c.last_message_at,
+      unreadCount: c.unread_count,
+      status: c.status,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getConversationById(id) {
+  const c = await api.get(`/conversations/${id}`);
+  if (!c) return null;
+  const page = await api.get(`/conversations/${id}/messages?limit=200`);
+  return {
+    id: c.id,
+    sellerId: c.seller_id,
+    buyerId: c.buyer_id,
+    customerName: c.customer_name,
+    lastMessage: c.last_message,
+    lastMessageTime: c.last_message_at,
+    unreadCount: c.unread_count,
+    status: c.status,
+    messages: (page.items || []).map((m) => ({
+      id: m.id,
+      senderType: m.sender_type,
+      text: m.content,
+      timestamp: m.created_at,
+      isAI: m.is_ai_generated,
+      sentiment: m.sentiment,
+    })),
+  };
+}
+
+export async function createConversation(buyerId) {
+  return await api.post('/conversations', { buyer_id: buyerId });
+}
+
+export async function sendMessage(conversationId, message) {
+  return await api.post(`/conversations/${conversationId}/messages`, {
+    content: message.text,
+    message_type: 'text',
+    client_message_id: message.clientMessageId,
+  });
+}
+
+export async function markAsRead(conversationId) {
+  return await api.patch(`/conversations/${conversationId}/read`);
+}
+
+// ── Human approval: AI drafts (seller reviews before send) ──
+
+export async function generateDraft(conversationId) {
+  return await api.post(`/conversations/${conversationId}/drafts`);
+}
+
+export async function editDraft(draftId, content) {
+  return await api.put(`/ai/drafts/${draftId}`, { content });
+}
+
+export async function setDraftStatus(draftId, status) {
+  return await api.patch(`/ai/drafts/${draftId}/status`, { status });
+}
+
+export async function sendDraft(draftId) {
+  return await api.post(`/ai/drafts/${draftId}/send`);
+}
+
+export async function analyzeText(content) {
+  return await api.post('/ai/analyze', { content });
+}
+
+// ── Orders ──
+
+export async function createOrder(items, extra = {}) {
+  return await api.post('/orders', {
+    items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+    shipping_address: extra.shippingAddress,
+    notes: extra.notes,
+  });
+}
+
+export async function getOrders(cursor) {
+  try {
+    const qs = cursor ? `?cursor=${cursor}` : '';
+    const data = await api.get(`/orders${qs}`);
+    return { items: (data.items || []).map(mapOrder), nextCursor: data.next_cursor };
+  } catch {
+    return { items: [], nextCursor: null };
+  }
+}
+
+export async function getOrder(id) {
+  const o = await api.get(`/orders/${id}`);
+  return o ? mapOrder(o) : null;
+}
+
+export async function updateOrderStatus(id, status) {
+  return await api.patch(`/orders/${id}/status`, { status });
+}
+
+export async function reviewOrder(orderId, rating, comment, title) {
+  return await api.post(`/orders/${orderId}/review`, { rating, comment, title });
+}
+
+function mapOrder(o) {
+  return {
+    id: o.id,
+    orderNumber: o.order_number,
+    buyerId: o.buyer_id,
+    sellerId: o.seller_id,
+    status: o.status,
+    totalAmount: o.total_amount,
+    currency: o.currency,
+    paymentMethod: o.payment_method,
+    shippingAddress: o.shipping_address,
+    notes: o.notes,
+    createdAt: o.created_at,
+    items: (o.items || []).map((i) => ({
+      productId: i.product_id,
+      quantity: i.quantity,
+      unitPrice: i.unit_price,
+      totalPrice: i.total_price,
+    })),
+  };
+}
+
+// ── Payments / Transactions ──
+
+export async function getPaymentForOrder(orderId) {
+  return await api.get(`/payments/orders/${orderId}`);
+}
+
+// ── Analytics ──
+
+export async function getSellerAnalytics(sellerId, force = false) {
+  try {
+    return await api.get(`/analytics/${sellerId}${force ? '?force=true' : ''}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getTrustScore(sellerId) {
+  try { return await api.get(`/analytics/${sellerId}/trust-score`); } catch { return null; }
+}
+
+// ── Derived helpers (kept for existing screens) ──
+
+export async function getTotalUnread() {
+  const convos = await getConversations();
+  return convos.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+}
+
+export async function getRecentReviews(sellerId, limit = 10) {
+  const products = await getProductsBySeller(sellerId);
+  const allReviews = [];
+  for (const product of products) {
+    for (const review of product.reviews || []) {
+      allReviews.push({ ...review, productName: product.name, productId: product.id });
+    }
+  }
+  return allReviews.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, limit);
+}
 
 export async function computeTrustScore(sellerId) {
   const products = await getProductsBySeller(sellerId);
@@ -210,113 +402,15 @@ export async function getReviewCount(sellerId) {
 export async function getDerivedCustomers(sellerId) {
   const products = await getProductsBySeller(sellerId);
   const customerMap = {};
-
   for (const product of products) {
     for (const review of product.reviews || []) {
       const key = review.customerName.toLowerCase().trim();
       if (!customerMap[key]) {
-        customerMap[key] = {
-          name: review.customerName,
-          reviews: [],
-          lastDate: review.date,
-        };
+        customerMap[key] = { name: review.customerName, reviews: [], lastDate: review.date };
       }
       customerMap[key].reviews.push({ ...review, productName: product.name, productId: product.id });
-      if (review.date > customerMap[key].lastDate) {
-        customerMap[key].lastDate = review.date;
-      }
+      if (review.date > customerMap[key].lastDate) customerMap[key].lastDate = review.date;
     }
   }
-
   return customerMap;
-}
-
-// ── Conversations / Inbox ──
-
-export async function getConversationsBySeller(sellerId) {
-  try {
-    const convos = await api.get('/conversations');
-    return (convos || []).map((c) => ({
-      id: c.id,
-      sellerId: c.seller_id,
-      customerName: c.customer_name,
-      lastMessage: c.last_message,
-      lastMessageTime: c.last_message_at,
-      unreadCount: c.unread_count,
-      orderTag: c.order_tag,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-export async function getConversationById(id) {
-  const c = await api.get(`/conversations/${id}`);
-  if (!c) return null;
-  return {
-    id: c.id,
-    sellerId: c.seller_id,
-    customerName: c.customer_name,
-    lastMessage: c.last_message,
-    lastMessageTime: c.last_message_at,
-    unreadCount: c.unread_count,
-    orderTag: c.order_tag,
-    messages: (c.messages || []).map((m) => ({
-      id: m.id,
-      senderType: m.sender_type,
-      text: m.text,
-      timestamp: m.created_at,
-      isAI: m.is_ai_generated,
-      order: m.order_data,
-    })),
-  };
-}
-
-export async function createConversation(data) {
-  return await api.post('/conversations', {
-    customer_name: data.customerName,
-    order_tag: data.orderTag,
-  });
-}
-
-export async function updateConversation(id, updates) {
-  const payload = {};
-  if (updates.customerName !== undefined) payload.customer_name = updates.customerName;
-  if (updates.orderTag !== undefined) payload.order_tag = updates.orderTag;
-  return await api.put(`/conversations/${id}`, payload);
-}
-
-export async function sendMessage(conversationId, message) {
-  const payload = {
-    sender_type: message.senderType || 'seller',
-    sender_name: message.senderName || null,
-    text: message.text,
-    is_ai_generated: message.isAI || false,
-    order_data: message.order || null,
-  };
-  return await api.post(`/conversations/${conversationId}/messages`, payload);
-}
-
-export async function markAsRead(conversationId) {
-  return await api.patch(`/conversations/${conversationId}/read`);
-}
-
-// ── Derived: All reviews sorted by date ──
-
-export async function getRecentReviews(sellerId, limit = 10) {
-  const products = await getProductsBySeller(sellerId);
-  const allReviews = [];
-  for (const product of products) {
-    for (const review of product.reviews || []) {
-      allReviews.push({ ...review, productName: product.name, productId: product.id });
-    }
-  }
-  return allReviews
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, limit);
-}
-
-export async function getTotalUnread(sellerId) {
-  const convos = await getConversationsBySeller(sellerId);
-  return convos.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
 }

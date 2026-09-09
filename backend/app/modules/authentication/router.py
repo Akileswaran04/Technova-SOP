@@ -14,7 +14,7 @@ async def register(
     data: RegisterRequest,
     service: AuthService = Depends(get_auth_service),
 ):
-    """Register a new seller account."""
+    """Register a new seller or buyer account (role picked once, at registration)."""
     return await service.register(data)
 
 
@@ -27,24 +27,40 @@ async def login(
     return await service.login(data)
 
 
+@router.post("/logout")
+async def logout():
+    """Logout — stateless JWT; the client discards the token.
+
+    If server-side revocation is needed later, add a Redis denylist here.
+    """
+    return {"message": "Logged out successfully"}
+
+
 @router.get("/me")
 async def get_me(
     user_id: str = Depends(get_current_user_id),
     service: AuthService = Depends(get_auth_service),
 ):
-    """Get current user info and seller profile."""
+    """Get current user info plus the profile matching their role."""
     uid = int(user_id)
     user = await service.get_current_user(uid)
-    profile = await service.get_seller_profile(uid)
+    role = user.role.value if hasattr(user.role, "value") else user.role
 
-    return {
+    base = {
         "user": {
             "id": str(user.id),
             "email": user.email,
             "full_name": user.full_name,
-            "role": user.role.value if hasattr(user.role, 'value') else user.role,
+            "phone": user.phone,
+            "role": role,
         } if user else None,
-        "seller": {
+        "seller": None,
+        "buyer": None,
+    }
+
+    if role == "seller":
+        profile = await service.get_seller_profile(uid)
+        base["seller"] = {
             "id": str(profile.id),
             "business_name": profile.business_name,
             "business_type": profile.business_type,
@@ -54,7 +70,19 @@ async def get_me(
             "website": profile.website,
             "city": profile.city,
             "country": profile.country,
-            "verification_status": profile.verification_status.value if hasattr(profile.verification_status, 'value') else profile.verification_status,
+            "verification_status": profile.verification_status.value if hasattr(profile.verification_status, "value") else profile.verification_status,
             "created_at": profile.created_at.isoformat() if profile.created_at else None,
-        } if profile else None,
-    }
+        } if profile else None
+    elif role == "buyer":
+        profile = await service.get_buyer_profile(uid)
+        base["buyer"] = {
+            "id": str(profile.id),
+            "first_name": profile.first_name,
+            "last_name": profile.last_name,
+            "phone": profile.phone,
+            "city": profile.city,
+            "country": profile.country,
+            "created_at": profile.created_at.isoformat() if profile.created_at else None,
+        } if profile else None
+
+    return base

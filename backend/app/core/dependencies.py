@@ -1,12 +1,14 @@
 """Core dependency injection for FastAPI."""
 
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional, Sequence
 
 from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
 from app.infrastructure.postgres.session import get_db_session
+from app.modules.seller_profile.models import User
 
 
 async def get_current_user_id(
@@ -41,7 +43,68 @@ async def get_current_user_id(
     return user_id
 
 
+def _extract_token(authorization: Optional[str]) -> Optional[dict]:
+    """Decode a bearer token from an Authorization header."""
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "")
+    return decode_access_token(token)
+
+
+def get_token_payload(
+    authorization: str = Header(None),
+) -> dict:
+    """Return the decoded JWT payload (sub + role claims)."""
+    payload = _extract_token(authorization)
+    if payload is None or payload.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return payload
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Get async database session."""
     async for session in get_db_session():
         yield session
+
+
+async def get_current_user(
+    payload: dict = Depends(get_token_payload),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Load the full User row for the authenticated principal.
+
+    Server-side RBAC source of truth — never trust client-supplied ids.
+    """
+    result = await db.execute(
+        select(User).where(User.id == int(payload["sub"]))
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+def require_roles(*roles: str):
+    """Dependency factory: restrict an endpoint to specific roles."""
+    async def _role_checker(user: User = Depends(get_current_user)) -> User:
+        if user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requires role: {', '.join(roles)}",
+            )
+        return user
+    return _role_checker
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Get async database session."""
+    async for session in get_db_session():
+        yield session

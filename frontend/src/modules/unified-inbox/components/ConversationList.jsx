@@ -4,7 +4,7 @@
  * Data loaded from backend API.
  */
 import { useState, useEffect } from 'react';
-import { getConversationsBySeller } from '../../../services/storage';
+import { getConversations } from '../../../services/storage';
 
 function formatTime(timestamp) {
   if (!timestamp) return '';
@@ -32,7 +32,7 @@ export default function ConversationList({ sellerId, selectedId, onSelect }) {
     let cancelled = false;
     (async () => {
       try {
-        const data = await getConversationsBySeller(sellerId);
+        const data = await getConversations();
         if (!cancelled) setConversations(data);
       } catch (err) {
         console.error('Failed to load conversations:', err);

@@ -57,7 +57,7 @@ async def test_mongodb_connection():
     """Test MongoDB/Atlas connection."""
     print(f"\n{BLUE}Testing MongoDB (Atlas)...{RESET}")
     try:
-        from motor.motor_asyncio import AsyncClient
+        from motor.motor_asyncio import AsyncIOMotorClient as AsyncClient
         
         uri = os.getenv('MONGODB_URI')
         if not uri:
