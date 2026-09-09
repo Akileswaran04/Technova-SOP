@@ -11,9 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.seller_profile.models import User, SellerProfile
 from app.modules.buyer_profile.models import BuyerProfile
-from app.modules.authentication.schemas import RegisterRequest, LoginRequest
+from app.modules.authentication.schemas import RegisterRequest, LoginRequest, DemoLoginRequest
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.exceptions import ConflictException, ValidationException, NotFoundException
+
+# Seeded by backend/seed_demo_users.py — same keys as the demo buttons.
+DEMO_ACCOUNT_EMAILS = {
+    "seller1": "seller1@technova.local",
+    "seller2": "seller2@technova.local",
+    "buyer1": "buyer1@technova.local",
+    "buyer2": "buyer2@technova.local",
+    "admin": "admin@technova.local",
+}
 
 
 class AuthService:
@@ -86,6 +95,21 @@ class AuthService:
             "full_name": user.full_name,
         }
 
+    async def demo_login(self, data: DemoLoginRequest) -> dict:
+        """One-click login for a seeded demo account (temporary login).
+
+        Demo-only convenience for the local build: the key maps to a fixed
+        demo email, and only accounts seeded by seed_demo_users.py qualify.
+        """
+        email = DEMO_ACCOUNT_EMAILS.get(data.demo)
+        if not email:
+            raise ValidationException("Unknown demo account")
+        result = await self.db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_active:
+            raise NotFoundException("User", email)
+        return await self._token_response(user)
+
     async def login(self, data: LoginRequest) -> dict:
         """Login with email/phone and password."""
         # Find user by email or phone
@@ -112,6 +136,23 @@ class AuthService:
             profile = profile_result.scalar_one_or_none()
             seller_id = str(profile.id) if profile else None
         elif user.role == "buyer":
+            profile_result = await self.db.execute(
+                select(BuyerProfile).where(BuyerProfile.user_id == user.id)
+            )
+            profile = profile_result.scalar_one_or_none()
+            buyer_id = str(profile.id) if profile else None
+
+        return await self._token_response(user, seller_id=seller_id, buyer_id=buyer_id)
+
+    async def _token_response(self, user, seller_id=None, buyer_id=None) -> dict:
+        """Build the standard token response for a user."""
+        if user.role == "seller" and seller_id is None:
+            profile_result = await self.db.execute(
+                select(SellerProfile).where(SellerProfile.user_id == user.id)
+            )
+            profile = profile_result.scalar_one_or_none()
+            seller_id = str(profile.id) if profile else None
+        elif user.role == "buyer" and buyer_id is None:
             profile_result = await self.db.execute(
                 select(BuyerProfile).where(BuyerProfile.user_id == user.id)
             )

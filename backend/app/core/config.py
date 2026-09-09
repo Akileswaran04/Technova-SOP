@@ -6,7 +6,7 @@ DATABASE_URL/MONGODB_URL/REDIS_URL in the process environment can't silently
 win over the checked-in local config.
 """
 
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
@@ -39,6 +39,17 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    # Public base URL (OAuth redirects / demo links)
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
+
+    # External integrations — Gmail / Microsoft Graph OAuth (empty = mock mode)
+    GMAIL_CLIENT_ID: Optional[str] = None
+    GMAIL_CLIENT_SECRET: Optional[str] = None
+    GMAIL_REDIRECT_URI: Optional[str] = None
+    MICROSOFT_CLIENT_ID: Optional[str] = None
+    MICROSOFT_CLIENT_SECRET: Optional[str] = None
+    MICROSOFT_REDIRECT_URI: Optional[str] = None
 
     # File Storage (future)
     STORAGE_BUCKET: str = "technova-storage"

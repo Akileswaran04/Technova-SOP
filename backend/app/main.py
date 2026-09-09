@@ -37,6 +37,7 @@ from app.modules.payments.router import router as payments_router
 from app.modules.analytics.router import router as analytics_router
 from app.modules.admin.router import router as admin_router
 from app.modules.authentication.router import router as auth_router
+from app.modules.api_integration.router import router as api_integration_router
 from app.modules.analytics.worker import compute_all
 
 # Configure logging
@@ -192,6 +193,7 @@ def create_app() -> FastAPI:
     app.include_router(payments_router, prefix="/api/v1", tags=["Payments"])
     app.include_router(analytics_router, prefix="/api/v1/analytics", tags=["Analytics"])
     app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
+    app.include_router(api_integration_router, prefix="/api/v1", tags=["API Integration"])
     app.include_router(ws_router)  # /ws/chat
 
     return app

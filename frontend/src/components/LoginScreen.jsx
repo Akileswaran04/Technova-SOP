@@ -4,7 +4,14 @@
  * single login, no toggle afterwards.
  */
 import { useState } from 'react';
-import { registerUser, loginUser } from '../services/storage';
+import { registerUser, loginUser, demoLogin } from '../services/storage';
+
+const DEMO_ACCOUNTS = [
+  { key: 'seller1', label: 'Seller 1', sub: 'Rajesh Handicrafts', icon: 'storefront', role: 'seller' },
+  { key: 'seller2', label: 'Seller 2', sub: 'Meena Organics', icon: 'storefront', role: 'seller' },
+  { key: 'buyer1', label: 'Buyer 1', sub: 'Arjun Mehta', icon: 'shopping_bag', role: 'buyer' },
+  { key: 'buyer2', label: 'Buyer 2', sub: 'Sana Khan', icon: 'shopping_bag', role: 'buyer' },
+];
 
 export default function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
@@ -18,6 +25,19 @@ export default function LoginScreen({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState('');
+
+  const handleDemoLogin = async (demoKey) => {
+    setError('');
+    setDemoLoading(demoKey);
+    try {
+      const result = await demoLogin(demoKey);
+      onLogin(result);
+    } catch (err) {
+      setError('Demo login failed. Run the seed script first (seed_demo_users.py).');
+      setDemoLoading('');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -276,6 +296,38 @@ export default function LoginScreen({ onLogin }) {
               {mode === 'login' ? 'Create Account' : 'Back to Login'}
             </button>
           </div>
+
+          {mode === 'login' && (
+            <div className="mt-5">
+              <div className="relative flex items-center py-1">
+                <div className="flex-grow border-t border-outline-variant"></div>
+                <span className="flex-shrink-0 mx-4 text-label-sm text-on-surface-variant">Temporary demo login</span>
+                <div className="flex-grow border-t border-outline-variant"></div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                {DEMO_ACCOUNTS.map((acc) => (
+                  <button
+                    type="button"
+                    key={acc.key}
+                    disabled={!!demoLoading}
+                    onClick={() => handleDemoLogin(acc.key)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-primary/60 hover:bg-primary-container/10 disabled:opacity-50 text-left transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-primary flex-shrink-0">
+                      {demoLoading === acc.key ? 'sync' : acc.icon}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-label-md text-on-surface font-semibold">{acc.label}</span>
+                      <span className="block text-label-sm text-on-surface-variant truncate">{acc.sub}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-label-sm text-on-surface-variant mt-2 text-center">
+                One-click access to the seeded demo accounts (all data lives in the cloud DBs).
+              </p>
+            </div>
+          )}
         </form>
       </main>
     </div>

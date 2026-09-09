@@ -2,14 +2,19 @@
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_current_user_id
+from app.infrastructure.redis.ratelimit import rate_limit
 from app.modules.authentication.dependencies import get_auth_service
-from app.modules.authentication.schemas import RegisterRequest, LoginRequest, TokenResponse
+from app.modules.authentication.schemas import RegisterRequest, LoginRequest, DemoLoginRequest, TokenResponse
 from app.modules.authentication.service import AuthService
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=TokenResponse)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit(20, 60, "auth:register"))],
+)
 async def register(
     data: RegisterRequest,
     service: AuthService = Depends(get_auth_service),
@@ -18,13 +23,33 @@ async def register(
     return await service.register(data)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit(30, 60, "auth:login"))],
+)
 async def login(
     data: LoginRequest,
     service: AuthService = Depends(get_auth_service),
 ):
     """Login with email/phone and password."""
     return await service.login(data)
+
+
+@router.post(
+    "/demo-login",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit(30, 60, "auth:demo"))],
+)
+async def demo_login(
+    data: DemoLoginRequest,
+    service: AuthService = Depends(get_auth_service),
+):
+    """One-click temporary login with a seeded demo account.
+
+    Keys: seller1, seller2, buyer1, buyer2, admin (see seed_demo_users.py).
+    """
+    return await service.demo_login(data)
 
 
 @router.post("/logout")

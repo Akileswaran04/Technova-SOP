@@ -31,6 +31,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class DemoLoginRequest(BaseModel):
+    """One-click demo login — picks a seeded demo account by key."""
+    demo: Literal["seller1", "seller2", "buyer1", "buyer2", "admin"] = Field(
+        ..., description="Demo account key (seller1, seller2, buyer1, buyer2, admin)"
+    )
+
+
 class TokenResponse(BaseModel):
     """JWT token response."""
     access_token: str

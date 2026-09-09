@@ -195,11 +195,14 @@ class InboxService:
             "sentiment": sentiment,
             "sequenceNumber": sequence,
             "attachments": data.attachments,
-            "clientMessageId": data.client_message_id,
             "createdAt": utcnow(),
             "readAt": None,
             "isAiGenerated": False,
         }
+        # Sparse unique index on clientMessageId: omit the field when unset,
+        # otherwise nulls collide and every message without an id would fail.
+        if data.client_message_id:
+            doc["clientMessageId"] = data.client_message_id
         saved = await self.msg_repo.create(doc)
 
         # Update conversation summary + unread for the recipient

@@ -56,6 +56,12 @@ export async function loginUser(identifier, password) {
 export const registerSeller = registerUser;
 export const loginSeller = loginUser;
 
+// One-click temporary login with a seeded demo account (seller1/seller2/buyer1/buyer2/admin)
+export async function demoLogin(demoKey) {
+  const result = await api.post('/auth/demo-login', { demo: demoKey });
+  return setSession(result);
+}
+
 export async function logoutUser() {
   try { await api.post('/auth/logout'); } catch { /* stateless JWT */ }
   clearSession();
