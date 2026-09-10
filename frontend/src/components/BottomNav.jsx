@@ -2,7 +2,7 @@
  * BottomNav — mobile-first bottom tab navigation.
  * Now includes Inbox with unread badge.
  */
-import { getNavTabs } from '../modules/MODULES';
+import { getNavTabs, TAB_KEYS } from '../modules/MODULES';
 
 const TABS = getNavTabs();
 
@@ -15,7 +15,7 @@ export default function BottomNav({ activeTab, onTabChange, unreadCount }) {
       <div className="flex justify-around items-center h-20">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
-          const showBadge = tab.key === 'inbox' && unreadCount > 0;
+          const showBadge = tab.key === TAB_KEYS.INBOX && unreadCount > 0;
           return (
             <button
               key={tab.key}
@@ -62,7 +62,7 @@ export function DesktopTabs({ activeTab, onTabChange, unreadCount }) {
     <div className="hidden lg:flex gap-1 mb-6 border-b border-outline-variant">
       {TABS.map((tab) => {
         const isActive = activeTab === tab.key;
-        const showBadge = tab.key === 'inbox' && unreadCount > 0;
+        const showBadge = tab.key === TAB_KEYS.INBOX && unreadCount > 0;
         return (
           <button
             key={tab.key}

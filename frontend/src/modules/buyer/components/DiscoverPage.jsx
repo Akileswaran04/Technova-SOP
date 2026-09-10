@@ -7,6 +7,16 @@ import { discover } from '../../../services/storage';
 
 export default function DiscoverPage({ onOpenProduct }) {
   const [filters, setFilters] = useState({ category: '', budget: '', q: '' });
+  // Raw search-box text; debounced into filters.q so typing doesn't fire a
+  // backend request per keystroke
+  const [searchInput, setSearchInput] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters((f) => (f.q === searchInput ? f : { ...f, q: searchInput }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -67,8 +77,8 @@ export default function DiscoverPage({ onOpenProduct }) {
         <div className="relative">
           <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
           <input
-            value={filters.q}
-            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search products or sellers..."
             className="w-full h-12 pl-12 pr-4 rounded-lg border border-outline-variant bg-surface text-on-surface text-body-md focus:border-primary focus:outline-none"
           />

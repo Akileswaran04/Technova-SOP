@@ -24,6 +24,20 @@ async def create_conversation(
     return await service.get_or_create_conversation(user.id, user.role, data)
 
 
+@router.get("/unread/total")
+async def get_unread_total(
+    user=Depends(get_current_user),
+    service: InboxService = Depends(get_inbox_service),
+):
+    """Total unread messages across all conversations — single Mongo aggregate.
+
+    Cheap endpoint for nav badges: no conversation rows are fetched or
+    serialized, so polling this is far lighter than listing conversations.
+    """
+    total = await service.get_unread_total(user.id, user.role)
+    return {"total": total}
+
+
 @router.get("")
 async def list_conversations(
     cursor: Optional[str] = Query(None),

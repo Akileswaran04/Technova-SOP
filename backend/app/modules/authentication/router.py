@@ -83,8 +83,10 @@ async def get_me(
         "buyer": None,
     }
 
+    # Profile comes from the eager-loaded relationship (one query total for
+    # /auth/me instead of three sequential round trips)
     if role == "seller":
-        profile = await service.get_seller_profile(uid)
+        profile = user.seller_profile
         base["seller"] = {
             "id": str(profile.id),
             "business_name": profile.business_name,
@@ -99,7 +101,7 @@ async def get_me(
             "created_at": profile.created_at.isoformat() if profile.created_at else None,
         } if profile else None
     elif role == "buyer":
-        profile = await service.get_buyer_profile(uid)
+        profile = user.buyer_profile
         base["buyer"] = {
             "id": str(profile.id),
             "first_name": profile.first_name,

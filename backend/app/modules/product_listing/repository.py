@@ -28,13 +28,24 @@ class ProductRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_seller(self, seller_id: int) -> list[Product]:
+    async def get_by_seller(
+        self, seller_id: int, limit: int = 100, offset: int = 0
+    ) -> tuple[list[Product], bool]:
+        """Seller's products, newest first, paginated.
+
+        Fetches limit+1 rows to report has_more, so callers don't need a
+        separate COUNT query (every extra query is a full DB round trip).
+        """
         result = await self.db.execute(
             select(Product)
             .where(Product.seller_id == seller_id)
             .order_by(Product.created_at.desc())
+            .limit(limit + 1)
+            .offset(offset)
         )
-        return list(result.scalars().all())
+        rows = list(result.scalars().all())
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
 
     async def update(self, product_id: int, data: dict) -> Optional[Product]:
         await self.db.execute(

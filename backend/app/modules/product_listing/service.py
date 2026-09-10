@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.product_listing.repository import ProductRepository
-from app.modules.seller_profile.models import SellerProfile
+from app.modules.seller_profile.models import SellerProfile, Product
 from app.modules.buyer_profile.models import BuyerProfile
 from app.modules.orders.models import Review, OrderItem, Order
 from app.modules.product_listing.schemas import (
@@ -54,9 +54,23 @@ class ProductService:
     async def get_product(self, product_id: int) -> dict:
         return await self._get_product_or_404(product_id)
 
-    async def get_products_by_seller(self, user_id: int) -> list:
+    async def get_products_by_seller(self, user_id: int, limit: int = 100, offset: int = 0) -> dict:
+        """List the seller's products, offset-paginated.
+
+        Returns {items, has_more, limit, offset} so the frontend can page
+        through large catalogs instead of receiving every product in one
+        response — one query per page, no COUNT round trip.
+        """
         seller_id = await self._get_seller_id_from_user(user_id)
-        return await self.product_repo.get_by_seller(seller_id)
+        items, has_more = await self.product_repo.get_by_seller(
+            seller_id, limit=limit, offset=offset
+        )
+        return {
+            "items": items,
+            "has_more": has_more,
+            "limit": limit,
+            "offset": offset,
+        }
 
     async def get_public_seller_products(self, seller_id: int, limit: int = 100, offset: int = 0) -> list:
         """Public product list for a seller (used by buyer discovery)."""

@@ -2,12 +2,12 @@
 from typing import List
 
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import get_current_user_id
 from app.modules.product_listing.dependencies import get_product_service
 from app.modules.product_listing.schemas import (
-    ProductCreate, ProductUpdate, ProductResponse,
+    ProductCreate, ProductUpdate, ProductResponse, ProductListResponse,
     StockUpdate, LikeResponse, ReviewCreate, ReviewResponse, ReviewReply,
 )
 from app.modules.product_listing.service import ProductService
@@ -17,13 +17,15 @@ router = APIRouter()
 
 # ── Products ──
 
-@router.get("", response_model=List[ProductResponse])
+@router.get("", response_model=ProductListResponse)
 async def list_products(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """List all products for the current seller."""
-    return await service.get_products_by_seller(int(user_id))
+    """List the current seller's products, paginated (offset-based)."""
+    return await service.get_products_by_seller(int(user_id), limit=limit, offset=offset)
 
 
 @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)

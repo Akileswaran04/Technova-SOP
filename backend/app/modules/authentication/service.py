@@ -8,6 +8,7 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.modules.seller_profile.models import User, SellerProfile
 from app.modules.buyer_profile.models import BuyerProfile
@@ -104,7 +105,11 @@ class AuthService:
         email = DEMO_ACCOUNT_EMAILS.get(data.demo)
         if not email:
             raise ValidationException("Unknown demo account")
-        result = await self.db.execute(select(User).where(User.email == email))
+        result = await self.db.execute(
+            select(User)
+            .where(User.email == email)
+            .options(selectinload(User.seller_profile), selectinload(User.buyer_profile))
+        )
         user = result.scalar_one_or_none()
         if not user or not user.is_active:
             raise NotFoundException("User", email)
@@ -112,11 +117,14 @@ class AuthService:
 
     async def login(self, data: LoginRequest) -> dict:
         """Login with email/phone and password."""
-        # Find user by email or phone
+        # Find user by email or phone — profiles eager-loaded so login is a
+        # single query instead of three sequential round trips
         result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .where(
                 (User.email == data.identifier) | (User.phone == data.identifier)
             )
+            .options(selectinload(User.seller_profile), selectinload(User.buyer_profile))
         )
         user = result.scalar_one_or_none()
 
@@ -126,37 +134,29 @@ class AuthService:
         if not verify_password(data.password, user.password_hash):
             raise ValidationException("Incorrect password")
 
-        # Resolve profile by role
+        # Resolve profile by role (already loaded with the user)
         seller_id = None
         buyer_id = None
         if user.role == "seller":
-            profile_result = await self.db.execute(
-                select(SellerProfile).where(SellerProfile.user_id == user.id)
-            )
-            profile = profile_result.scalar_one_or_none()
+            profile = user.seller_profile
             seller_id = str(profile.id) if profile else None
         elif user.role == "buyer":
-            profile_result = await self.db.execute(
-                select(BuyerProfile).where(BuyerProfile.user_id == user.id)
-            )
-            profile = profile_result.scalar_one_or_none()
+            profile = user.buyer_profile
             buyer_id = str(profile.id) if profile else None
 
         return await self._token_response(user, seller_id=seller_id, buyer_id=buyer_id)
 
     async def _token_response(self, user, seller_id=None, buyer_id=None) -> dict:
-        """Build the standard token response for a user."""
+        """Build the standard token response for a user.
+
+        Profiles are resolved from the eager-loaded relationships on `user`
+        (set up by the caller's selectinload) — no extra queries.
+        """
         if user.role == "seller" and seller_id is None:
-            profile_result = await self.db.execute(
-                select(SellerProfile).where(SellerProfile.user_id == user.id)
-            )
-            profile = profile_result.scalar_one_or_none()
+            profile = user.seller_profile
             seller_id = str(profile.id) if profile else None
         elif user.role == "buyer" and buyer_id is None:
-            profile_result = await self.db.execute(
-                select(BuyerProfile).where(BuyerProfile.user_id == user.id)
-            )
-            profile = profile_result.scalar_one_or_none()
+            profile = user.buyer_profile
             buyer_id = str(profile.id) if profile else None
 
         # Generate token with role claim
@@ -173,9 +173,15 @@ class AuthService:
         }
 
     async def get_current_user(self, user_id) -> Optional[User]:
-        """Get current user by ID."""
+        """Get current user by ID, with role profile eager-loaded.
+
+        /auth/me needs both the user and their profile; loading them in one
+        query avoids a second full DB round trip on every dashboard load.
+        """
         result = await self.db.execute(
-            select(User).where(User.id == user_id)
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.seller_profile), selectinload(User.buyer_profile))
         )
         return result.scalar_one_or_none()
 

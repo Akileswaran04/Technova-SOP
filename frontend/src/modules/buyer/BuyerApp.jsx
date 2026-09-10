@@ -101,6 +101,7 @@ export default function BuyerApp({ onLogout }) {
       {selectedProduct && (
         <ProductDetail
           productId={selectedProduct.id}
+          sellerId={selectedProduct.seller_id}
           onClose={() => setSelectedProduct(null)}
           onChatOpened={handleChatOpened}
           onToast={showToast}

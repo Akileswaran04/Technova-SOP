@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { getProductById, getSellerPublic, createConversation, createOrder } from '../../../services/storage';
 
-export default function ProductDetail({ productId, onClose, onChatOpened, onToast }) {
+export default function ProductDetail({ productId, sellerId, onClose, onChatOpened, onToast }) {
   const [product, setProduct] = useState(null);
   const [seller, setSeller] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -16,18 +16,22 @@ export default function ProductDetail({ productId, onClose, onChatOpened, onToas
     let cancelled = false;
     (async () => {
       try {
-        const p = await getProductById(productId);
-        if (!cancelled) setProduct(p);
-        if (p?.sellerId) {
-          const s = await getSellerPublic(p.sellerId);
-          if (!cancelled) setSeller(s);
+        // Product + seller info fetched in parallel (sellerId comes from the
+        // discover result), instead of two sequential round-trips
+        const [p, s] = await Promise.all([
+          getProductById(productId),
+          sellerId ? getSellerPublic(sellerId) : Promise.resolve(null),
+        ]);
+        if (!cancelled) {
+          setProduct(p);
+          setSeller(s);
         }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load product');
       }
     })();
     return () => { cancelled = true; };
-  }, [productId]);
+  }, [productId, sellerId]);
 
   const handleChat = async () => {
     try {

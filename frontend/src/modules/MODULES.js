@@ -9,33 +9,48 @@
  * 5. Analytics — sales insights
  */
 
+/**
+ * TAB_KEYS — single source of truth for seller dashboard tab keys.
+ * Nav components send these keys via onTabChange; App.jsx switches on them.
+ * Always reference TAB_KEYS.xxx instead of hard-coding strings so the two
+ * sides can't drift apart (drift = blank screen with no console error).
+ */
+export const TAB_KEYS = {
+  PRODUCTS: 'products',
+  INVENTORY: 'inventory',
+  INBOX: 'inbox',
+  CUSTOMERS: 'customers',
+  ANALYTICS: 'analytics',
+  PROFILE: 'profile',
+};
+
 const MODULES = [
   {
-    key: 'seller-profile',
+    key: TAB_KEYS.PROFILE,
     icon: 'person',
     label: 'Seller Profile',
     description: 'Manage your store details, verification, and public presence',
   },
   {
-    key: 'product-listing',
+    key: TAB_KEYS.PRODUCTS,
     icon: 'inventory_2',
     label: 'Products',
     description: 'Manage your catalog and product listings',
   },
   {
-    key: 'unified-inbox',
+    key: TAB_KEYS.INBOX,
     icon: 'chat',
     label: 'Inbox',
     description: 'Unified messaging with AI-powered auto-reply',
   },
   {
-    key: 'buyer-discovery',
+    key: TAB_KEYS.CUSTOMERS,
     icon: 'group',
     label: 'Buyers',
     description: 'Discover and connect with buyers',
   },
   {
-    key: 'analytics',
+    key: TAB_KEYS.ANALYTICS,
     icon: 'analytics',
     label: 'Analytics',
     description: 'Sales insights and performance metrics',

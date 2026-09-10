@@ -2,8 +2,8 @@
  * ProfileForm — LinkedIn/MD3 style profile.
  * All data loaded from backend API.
  */
-import { useState, useRef, useEffect } from 'react';
-import { updateSeller, computeTrustScore, getReviewCount, getRecentReviews, getProductsBySeller } from '../../../services/storage';
+import { useState, useRef, useMemo } from 'react';
+import { updateSeller, computeTrustScore, getReviewCount, getRecentReviews } from '../../../services/storage';
 
 function getTimeAgo(dateString) {
   const date = new Date(dateString);
@@ -161,7 +161,7 @@ function TrustGauge({ score, reviewCount }) {
   );
 }
 
-export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
+export default function ProfileForm({ seller, products = [], onSellerUpdate, onToast }) {
   const coverInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
@@ -171,34 +171,15 @@ export default function ProfileForm({ seller, onSellerUpdate, onToast }) {
   const [documents, setDocuments] = useState(seller.documents || []);
   const [loading, setLoading] = useState(false);
 
-  // Async data
-  const [trustScore, setTrustScore] = useState(null);
-  const [reviewCount, setReviewCount] = useState(0);
-  const [recentReviews, setRecentReviews] = useState([]);
-  const [totalProducts, setTotalProducts] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [score, count, reviews, products] = await Promise.all([
-          computeTrustScore(seller.id),
-          getReviewCount(seller.id),
-          getRecentReviews(seller.id, 10),
-          getProductsBySeller(seller.id),
-        ]);
-        if (!cancelled) {
-          setTrustScore(score);
-          setReviewCount(count);
-          setRecentReviews(reviews);
-          setTotalProducts(products.length);
-        }
-      } catch (err) {
-        console.error('Failed to load profile data:', err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [seller.id]);
+  // Trust/review stats derived from the products already loaded in App state.
+  // This used to fire 4 requests on tab open — 3 of them re-fetched the full
+  // product catalog just to compute averages client-side.
+  const { trustScore, reviewCount, recentReviews, totalProducts } = useMemo(() => ({
+    trustScore: computeTrustScore(products),
+    reviewCount: getReviewCount(products),
+    recentReviews: getRecentReviews(products, 10),
+    totalProducts: products.length,
+  }), [products]);
 
   const [form, setForm] = useState({
     storeName: seller.business_name || seller.storeName || '',

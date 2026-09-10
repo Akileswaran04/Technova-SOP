@@ -3,9 +3,10 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.infrastructure.redis.realtime import RealtimeService
-from app.infrastructure.mongodb.chat import utcnow
+from app.infrastructure.mongodb.chat import get_conversations_collection, utcnow
 from app.modules.unified_inbox.repository import (
     ConversationRepository, MessageRepository, serialize,
 )
@@ -14,6 +15,18 @@ from app.modules.buyer_profile.models import BuyerProfile
 from app.modules.unified_inbox.schemas import ConversationCreate, MessageCreate
 from app.modules.ai_communication.sentiment import analyze_message
 from app.core.exceptions import NotFoundException, ForbiddenException, ValidationException
+
+
+def _display_name(profile: BuyerProfile) -> Optional[str]:
+    """Best-effort buyer display name; falls back to account full_name/email.
+
+    Assumes BuyerProfile.user was eagerly loaded (selectinload) by the caller.
+    """
+    name = f"{profile.first_name} {profile.last_name}".strip()
+    if name:
+        return name
+    user = profile.user
+    return (user.full_name or user.email) if user is not None else None
 
 
 class InboxService:
@@ -56,14 +69,29 @@ class InboxService:
     def _other_participant(self, conversation: dict, participant_id: int, user_role: str) -> int:
         return conversation["buyerId"] if user_role == "seller" else conversation["sellerId"]
 
-    async def _buyer_name(self, buyer_id: int) -> Optional[str]:
+    async def _buyer_names(self, buyer_ids: list[int]) -> dict[int, Optional[str]]:
+        """Batch-resolve buyer names in ONE query (avoids N+1 per conversation)."""
+        ids = [b for b in buyer_ids if b is not None]
+        if not ids:
+            return {}
         result = await self.db.execute(
-            select(BuyerProfile).where(BuyerProfile.id == buyer_id)
+            select(BuyerProfile)
+            .where(BuyerProfile.id.in_(ids))
+            .options(selectinload(BuyerProfile.user))
         )
-        profile = result.scalar_one_or_none()
-        if not profile:
-            return None
-        return f"{profile.first_name} {profile.last_name}".strip()
+        profiles = result.scalars().all()
+        return {p.id: _display_name(p) for p in profiles}
+
+    async def _count_unread(self, participant_id: int, user_role: str) -> int:
+        """Cheap unread total: single aggregate over conversations, no row fetch."""
+        field = "sellerId" if user_role == "seller" else "buyerId"
+        convos = await get_conversations_collection()
+        pipeline = [
+            {"$match": {field: participant_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$unreadCount"}}},
+        ]
+        results = await convos.aggregate(pipeline).to_list(length=1)
+        return results[0]["total"] if results else 0
 
     # ── Conversations ──
 
@@ -99,13 +127,20 @@ class InboxService:
         docs, next_cursor = await self.convo_repo.list_for_participant(
             participant_id, user_role, cursor=cursor, limit=limit
         )
+        # One batched query for all buyer names instead of one per conversation
+        names = await self._buyer_names([c.get("buyerId") for c in docs])
         items = []
         for convo in docs:
             item = await self._to_response(convo)
             if user_role == "seller":
-                item["customer_name"] = await self._buyer_name(convo["buyerId"])
+                item["customer_name"] = names.get(convo.get("buyerId"))
             items.append(item)
         return {"items": items, "next_cursor": next_cursor, "limit": limit}
+
+    async def get_unread_total(self, user_id: int, user_role: str) -> int:
+        """Total unread messages across all conversations — one Mongo aggregate."""
+        participant_id = await self._resolve_participant(user_id, user_role)
+        return await self._count_unread(participant_id, user_role)
 
     async def get_conversation(self, conversation_id: str, user_id: int, user_role: str) -> dict:
         convo = await self.convo_repo.get_by_id(conversation_id)
@@ -114,7 +149,8 @@ class InboxService:
         await self._assert_participant(user_id, user_role, convo)
         response = await self._to_response(convo)
         if user_role == "seller":
-            response["customer_name"] = await self._buyer_name(convo["buyerId"])
+            names = await self._buyer_names([convo.get("buyerId")])
+            response["customer_name"] = names.get(convo.get("buyerId"))
         return response
 
     async def _to_response(self, convo: dict) -> dict:

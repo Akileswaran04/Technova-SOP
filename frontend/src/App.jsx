@@ -3,7 +3,7 @@
  * Single identity, single login: role comes from the JWT and routes the user
  * to the seller dashboard or the buyer app automatically.
  */
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, Suspense, lazy } from 'react';
 import { clearSession, getSession, getSellerById, getProductsBySeller, updateSeller, getTotalUnread } from './services/storage';
 import LoginScreen from './components/LoginScreen';
 import OnboardingForm from './components/OnboardingForm';
@@ -15,10 +15,27 @@ import { InventoryTable } from './modules/product-listing/components/inventory';
 import { InboxTab } from './modules/unified-inbox';
 import { CustomerList } from './modules/buyer-discovery';
 import { ProfileForm } from './modules/seller-profile';
-import { AnalyticsTab } from './modules/analytics';
-import BuyerApp from './modules/buyer/BuyerApp';
+import { TAB_KEYS } from './modules/MODULES';
 import Toast from './components/shared/Toast';
 import './index.css';
+
+// Heavy, role- or tab-specific screens are code-split so they only download
+// when actually used (buyer app: buyers only; analytics: pulls in recharts).
+const BuyerApp = lazy(() => import('./modules/buyer/BuyerApp'));
+const AnalyticsTab = lazy(() =>
+  import('./modules/analytics').then((m) => ({ default: m.AnalyticsTab }))
+);
+
+function FullScreenLoading() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <span className="material-symbols-outlined text-[48px] text-primary animate-pulse">sync</span>
+        <p className="text-body-md text-on-surface-variant mt-3">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const session = getSession();
@@ -26,15 +43,20 @@ export default function App() {
 
   // Buyer app — routed automatically by JWT role
   if (sessionRole === 'buyer') {
-    return <BuyerApp onLogout={() => setSessionRole(null)} />;
+    return (
+      <Suspense fallback={<FullScreenLoading />}>
+        <BuyerApp onLogout={() => setSessionRole(null)} />
+      </Suspense>
+    );
   }
   const [seller, setSeller] = useState(null);
   const [loading, setLoading] = useState(!!session?.token);
-  const [activeTab, setActiveTab] = useState('products');
+  const [activeTab, setActiveTab] = useState(TAB_KEYS.PRODUCTS);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [products, setProducts] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [unreadKey, setUnreadKey] = useState(0);
 
   // Load seller profile from API on mount
   useEffect(() => {
@@ -43,14 +65,17 @@ export default function App() {
     (async () => {
       try {
         const sellerData = await getSellerById();
-        if (!cancelled) {
-          setSeller(sellerData);
-          // Load products after seller is loaded
-          if (sellerData?.id) {
-            const prods = await getProductsBySeller(sellerData.id);
-            if (!cancelled) setProducts(prods);
-          }
-        }
+        if (cancelled) return;
+        setSeller(sellerData);
+        if (!sellerData?.id) return;
+        // Products load page-by-page: the first page unlocks the dashboard and
+        // later pages append in the background instead of one giant response.
+        let unlocked = false;
+        await getProductsBySeller((page) => {
+          if (cancelled) return;
+          setProducts((prev) => [...prev, ...page]);
+          if (!unlocked) { unlocked = true; setLoading(false); }
+        });
       } catch (err) {
         console.error('Failed to load seller:', err);
         clearSession();
@@ -61,12 +86,14 @@ export default function App() {
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reload products when refreshKey changes
+  // Reload products when refreshKey changes. Skip the very first run: the
+  // mount effect and handleLogin already load products, so re-fetching here
+  // after login would double the initial catalog request.
   useEffect(() => {
-    if (!seller?.id) return;
+    if (!seller?.id || refreshKey === 0) return;
     let cancelled = false;
     (async () => {
-      const prods = await getProductsBySeller(seller.id);
+      const prods = await getProductsBySeller();
       if (!cancelled) setProducts(prods);
     })();
     return () => { cancelled = true; };
@@ -88,10 +115,12 @@ export default function App() {
     }
     setLoading(true);
     try {
-      const profile = await getSellerById();
+      const [profile, prods] = await Promise.all([
+        getSellerById(),
+        getProductsBySeller(),
+      ]);
       setSeller(profile);
       if (profile?.id) {
-        const prods = await getProductsBySeller(profile.id);
         setProducts(prods);
       }
     } catch (err) {
@@ -105,7 +134,7 @@ export default function App() {
     clearSession();
     setSeller(null);
     setProducts([]);
-    setActiveTab('products');
+    setActiveTab(TAB_KEYS.PRODUCTS);
     setSessionRole(null);
   }, []);
 
@@ -128,20 +157,26 @@ export default function App() {
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
-  // Unread message count
+  // Unread message count — cheap aggregate endpoint, polled every 30s and
+  // re-fetched immediately when refreshKey changes (e.g. after viewing a chat).
+  // The old code re-listed every conversation on every product refresh.
   const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
     if (!seller?.id) return;
     let cancelled = false;
-    (async () => {
-      const count = await getTotalUnread(seller.id);
+    let timer;
+    const fetchUnread = async () => {
+      const count = await getTotalUnread();
       if (!cancelled) setUnreadCount(count);
-    })();
-    return () => { cancelled = true; };
-  }, [seller?.id, refreshKey]);
+      if (!cancelled) timer = setTimeout(fetchUnread, 30000);
+    };
+    fetchUnread();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [seller?.id, unreadKey]);
 
+  // Refresh only the unread badge (opening a chat shouldn't refetch products)
   const refreshUnread = useCallback(() => {
-    setRefreshKey((k) => k + 1);
+    setUnreadKey((k) => k + 1);
   }, []);
 
   // Low stock alerts
@@ -153,14 +188,7 @@ export default function App() {
 
   // Loading state
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <span className="material-symbols-outlined text-[48px] text-primary animate-pulse">sync</span>
-          <p className="text-body-md text-on-surface-variant mt-3">Loading...</p>
-        </div>
-      </div>
-    );
+    return <FullScreenLoading />;
   }
 
   if (!session?.token || !seller) return <LoginScreen onLogin={handleLogin} />;
@@ -226,7 +254,7 @@ export default function App() {
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
-            <button onClick={() => setActiveTab('inventory')}
+            <button onClick={() => setActiveTab(TAB_KEYS.INVENTORY)}
               className="mt-3 w-full h-10 bg-amber-100 hover:bg-amber-200 text-amber-800 text-label-md font-medium rounded-lg flex items-center justify-center gap-2 transition-colors">
               <span className="material-symbols-outlined text-[16px]">shelves</span>
               Go to Inventory to restock
@@ -234,23 +262,25 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'products' && (
+        {activeTab === TAB_KEYS.PRODUCTS && (
           <ProductGrid products={products} sellerId={seller.id} onUpdate={refreshProducts} onToast={showToast} />
         )}
-        {activeTab === 'inventory' && (
+        {activeTab === TAB_KEYS.INVENTORY && (
           <InventoryTable products={products} onUpdate={refreshProducts} onToast={showToast} />
         )}
-        {activeTab === 'inbox' && (
+        {activeTab === TAB_KEYS.INBOX && (
           <InboxTab sellerId={seller.id} onToast={showToast} onRefresh={refreshUnread} />
         )}
-        {activeTab === 'customers' && (
+        {activeTab === TAB_KEYS.CUSTOMERS && (
           <CustomerList sellerId={seller.id} products={products} onUpdate={refreshProducts} onToast={showToast} />
         )}
-        {activeTab === 'analytics' && (
-          <AnalyticsTab sellerId={seller.id} onToast={showToast} />
+        {activeTab === TAB_KEYS.ANALYTICS && (
+          <Suspense fallback={<FullScreenLoading />}>
+            <AnalyticsTab sellerId={seller.id} onToast={showToast} />
+          </Suspense>
         )}
-        {activeTab === 'profile' && (
-          <ProfileForm seller={seller} onSellerUpdate={handleSellerUpdate} onToast={showToast} />
+        {activeTab === TAB_KEYS.PROFILE && (
+          <ProfileForm seller={seller} products={products} onSellerUpdate={handleSellerUpdate} onToast={showToast} />
         )}
 
       </main>

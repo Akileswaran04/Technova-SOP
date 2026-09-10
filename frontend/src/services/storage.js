@@ -112,10 +112,26 @@ export async function updateBuyer(id, updates) {
 
 // ── Products (seller CRUD) ──
 
-export async function getProductsBySeller() {
+export async function getProductsBySeller(onPage) {
+  // The backend returns products paginated (offset-based). Fetch page by page
+  // so a large catalog never arrives in one giant response — the first page
+  // resolves quickly and remaining pages stream in via the onPage callback.
+  const PAGE = 100;
   try {
-    const products = await api.get('/products');
-    return (products || []).map(mapProduct);
+    const all = [];
+    let offset = 0;
+    let hasMore = true;
+    let pages = 0;
+    while (hasMore && pages < 100) {
+      const data = await api.get(`/products?limit=${PAGE}&offset=${offset}`);
+      const items = (data?.items || []).map(mapProduct);
+      all.push(...items);
+      if (onPage) onPage(items);
+      hasMore = !!data?.has_more;
+      offset += PAGE;
+      pages += 1;
+    }
+    return all;
   } catch {
     return [];
   }
@@ -236,9 +252,13 @@ export async function getConversations() {
 }
 
 export async function getConversationById(id) {
-  const c = await api.get(`/conversations/${id}`);
+  // Fetch conversation summary and message page in parallel (2 sequential
+  // round-trips made opening a chat noticeably slow)
+  const [c, page] = await Promise.all([
+    api.get(`/conversations/${id}`),
+    api.get(`/conversations/${id}/messages?limit=200`),
+  ]);
   if (!c) return null;
-  const page = await api.get(`/conversations/${id}/messages?limit=200`);
   return {
     id: c.id,
     sellerId: c.seller_id,
@@ -372,15 +392,23 @@ export async function getTrustScore(sellerId) {
   try { return await api.get(`/analytics/${sellerId}/trust-score`); } catch { return null; }
 }
 
-// ── Derived helpers (kept for existing screens) ──
+// ── Derived helpers (pure functions over an already-fetched product list) ──
+// These used to fetch the full product catalog themselves, so opening a tab
+// that used them re-downloaded every product (and its reviews) N times.
+// Callers that already have products (App state) now pass them in directly.
 
 export async function getTotalUnread() {
-  const convos = await getConversations();
-  return convos.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  // Lightweight aggregate endpoint — the old version fetched and mapped the
+  // entire conversation list just to sum unread counts
+  try {
+    const data = await api.get('/conversations/unread/total');
+    return data?.total || 0;
+  } catch {
+    return 0;
+  }
 }
 
-export async function getRecentReviews(sellerId, limit = 10) {
-  const products = await getProductsBySeller(sellerId);
+export function getRecentReviews(products, limit = 10) {
   const allReviews = [];
   for (const product of products) {
     for (const review of product.reviews || []) {
@@ -390,23 +418,20 @@ export async function getRecentReviews(sellerId, limit = 10) {
   return allReviews.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, limit);
 }
 
-export async function computeTrustScore(sellerId) {
-  const products = await getProductsBySeller(sellerId);
+export function computeTrustScore(products) {
   const allReviews = products.flatMap((p) => p.reviews || []);
   if (allReviews.length === 0) return null;
   const avg = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
   return Math.round(avg * 10) / 10;
 }
 
-export async function getReviewCount(sellerId) {
-  const products = await getProductsBySeller(sellerId);
+export function getReviewCount(products) {
   return products.reduce((sum, p) => sum + (p.reviews?.length || 0), 0);
 }
 
 // ── Derived: Customer list from reviews ──
 
-export async function getDerivedCustomers(sellerId) {
-  const products = await getProductsBySeller(sellerId);
+export function getDerivedCustomers(products) {
   const customerMap = {};
   for (const product of products) {
     for (const review of product.reviews || []) {

@@ -39,12 +39,15 @@ from app.modules.admin.router import router as admin_router
 from app.modules.authentication.router import router as auth_router
 from app.modules.api_integration.router import router as api_integration_router
 from app.modules.analytics.worker import compute_all
+from app.infrastructure.postgres.database import AsyncSessionLocal
+from sqlalchemy import text
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 ANALYTICS_INTERVAL_SECONDS = 5 * 60  # recompute summaries every 5 minutes
+DB_KEEPALIVE_INTERVAL_SECONDS = 60  # keep a scale-to-zero Neon compute warm
 
 
 def create_app() -> FastAPI:
@@ -102,6 +105,7 @@ def create_app() -> FastAPI:
     # ============================================
 
     analytics_task = None
+    keepalive_task = None
 
     @app.on_event("startup")
     async def startup_event():
@@ -128,6 +132,11 @@ def create_app() -> FastAPI:
         global analytics_task
         analytics_task = asyncio.create_task(_analytics_loop())
 
+        # Keep the DB warm: hosted Postgres that scales to zero would otherwise
+        # cold-start (seconds of latency) on the first request after idle.
+        global keepalive_task
+        keepalive_task = asyncio.create_task(_db_keepalive_loop())
+
         logger.info("TECHNOVA Backend startup complete")
 
     @app.on_event("shutdown")
@@ -137,6 +146,8 @@ def create_app() -> FastAPI:
 
         if analytics_task is not None:
             analytics_task.cancel()
+        if keepalive_task is not None:
+            keepalive_task.cancel()
         stop_realtime_forwarder()
 
         try:
@@ -161,6 +172,16 @@ def create_app() -> FastAPI:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Analytics worker iteration failed: %s", exc)
             await asyncio.sleep(ANALYTICS_INTERVAL_SECONDS)
+
+    async def _db_keepalive_loop():
+        """Lightweight Postgres ping so the compute stays warm between requests."""
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    await session.execute(text("SELECT 1"))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("DB keep-alive ping failed: %s", exc)
+            await asyncio.sleep(DB_KEEPALIVE_INTERVAL_SECONDS)
 
     # ============================================
     # API Routes

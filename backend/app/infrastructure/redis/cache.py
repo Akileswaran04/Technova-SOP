@@ -1,6 +1,7 @@
 """Redis cache client initialization and connection management."""
 import json
 import logging
+import time
 from typing import Any, Optional
 
 from pydantic import ConfigDict
@@ -28,17 +29,26 @@ class RedisClient:
     """Redis async client wrapper."""
 
     client: Optional[Redis] = None
+    # Backoff so a dead Redis isn't re-connected on every single request
+    # (each failed connect attempt costs seconds on a hosted instance).
+    _last_connect_attempt: float = 0.0
+    _CONNECT_RETRY_INTERVAL = 60  # seconds
 
     @classmethod
     async def connect_to_redis(cls) -> None:
         """Create connection to Redis."""
+        cls._last_connect_attempt = time.monotonic()
         try:
             logger.info(f"Connecting to Redis at {redis_settings.host}:{redis_settings.port}...")
             cls.client = await Redis.from_url(
                 redis_settings.url,
                 encoding="utf8",
                 decode_responses=True,
-                health_check_interval=30
+                health_check_interval=30,
+                # Bounded timeouts: a dead/unreachable hosted Redis must fail
+                # fast instead of stalling every request for many seconds.
+                socket_connect_timeout=3,
+                socket_timeout=3,
             )
             # Verify connection
             await cls.client.ping()
@@ -59,6 +69,8 @@ class RedisClient:
     async def get_client(cls) -> Optional[Redis]:
         """Get Redis client instance."""
         if cls.client is None:
+            if time.monotonic() - cls._last_connect_attempt < cls._CONNECT_RETRY_INTERVAL:
+                return None
             await cls.connect_to_redis()
         return cls.client
 

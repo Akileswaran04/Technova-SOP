@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { createCustomer, getCustomersBySeller, getDerivedCustomers } from '../../../services/storage';
 import CustomerDrawer from './CustomerDrawer';
 
-export default function CustomerList({ sellerId, products: _products, onUpdate, onToast }) {
+export default function CustomerList({ sellerId, products = [], onUpdate, onToast }) {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -20,10 +20,11 @@ export default function CustomerList({ sellerId, products: _products, onUpdate, 
     let cancelled = false;
     (async () => {
       try {
-        const [manual, derived] = await Promise.all([
-          getCustomersBySeller(sellerId),
-          getDerivedCustomers(sellerId),
-        ]);
+        // Manual customers come from the API; review-derived customers are
+        // computed from the products already loaded in App state (this used
+        // to re-fetch the entire catalog via getDerivedCustomers).
+        const manual = await getCustomersBySeller(sellerId);
+        const derived = getDerivedCustomers(products);
         if (!cancelled) {
           setManualCustomers(manual);
           setDerivedCustomers(derived);
@@ -35,7 +36,7 @@ export default function CustomerList({ sellerId, products: _products, onUpdate, 
       }
     })();
     return () => { cancelled = true; };
-  }, [sellerId]);
+  }, [sellerId, products]);
 
   const allCustomers = [];
   const seen = new Set();

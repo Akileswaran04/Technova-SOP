@@ -1,4 +1,6 @@
 """Analytics Service — read analytics/trust scores, compute on demand if stale."""
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -7,6 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.analytics.models import AnalyticsSummary, TrustScore
 from app.modules.analytics.worker import compute_for_seller
 from app.core.exceptions import NotFoundException
+
+logger = logging.getLogger(__name__)
+
+# In-flight refreshes, so concurrent tab loads don't stack duplicate computations
+_refresh_in_progress: set[int] = set()
 
 
 class AnalyticsService:
@@ -30,8 +37,8 @@ class AnalyticsService:
             created = summary.created_at
             if created and created.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc) - timedelta(minutes=30):
                 stale = True
-        if force or summary is None or stale:
-            # Fire-and-forget refresh so the request isn't blocked
+        if force or summary is None:
+            # First-ever request: nothing to serve yet, must compute synchronously
             await compute_for_seller(seller_id)
             result = await self.db.execute(
                 select(AnalyticsSummary)
@@ -40,6 +47,15 @@ class AnalyticsService:
                 .limit(1)
             )
             summary = result.scalar_one_or_none()
+        elif stale:
+            # Stale: serve the existing summary now and refresh in the background.
+            # Awaiting the recompute here blocked the tab load for seconds.
+            if seller_id not in _refresh_in_progress:
+                _refresh_in_progress.add(seller_id)
+                task = asyncio.create_task(compute_for_seller(seller_id))
+                task.add_done_callback(lambda _: _refresh_in_progress.discard(seller_id))
+            else:
+                logger.debug("Analytics refresh already running for seller %s", seller_id)
 
         if summary is None:
             raise NotFoundException("Analytics", str(seller_id))
@@ -61,7 +77,8 @@ class AnalyticsService:
         )
         trust = result.scalar_one_or_none()
         if trust is None:
-            # Compute on first request so discovery badges work immediately
+            # Compute on first request so discovery badges work immediately.
+            # Synchronous because there is nothing to serve otherwise.
             await compute_for_seller(seller_id)
             result = await self.db.execute(
                 select(TrustScore).where(TrustScore.seller_id == seller_id)

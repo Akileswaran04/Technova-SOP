@@ -77,6 +77,18 @@ class ProductResponse(BaseModel):
         from_attributes = True
 
 
+class ProductListResponse(BaseModel):
+    """Paginated product list (offset-based).
+
+    has_more signals another page exists — computed from a limit+1 fetch so
+    no separate COUNT query is needed.
+    """
+    items: List[ProductResponse]
+    has_more: bool
+    limit: int
+    offset: int
+
+
 class StockUpdate(BaseModel):
     """Adjust stock quantity."""
     delta: int = Field(..., description="Amount to add (positive) or subtract (negative)")

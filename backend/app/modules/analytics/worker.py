@@ -5,7 +5,9 @@ Runs periodically (started from main.py), never on every request. Writes into
 `analytics` (summary) and `trust_scores` tables. Chat response-time is read
 from MongoDB (messages collection), the rest from PostgreSQL.
 """
+import asyncio
 import logging
+import time
 from datetime import datetime
 
 from sqlalchemy import select, func, delete, cast
@@ -82,22 +84,30 @@ async def _compute_seller_metrics(db: AsyncSession, seller_id: int) -> dict:
 
 
 async def _compute_response_time(seller_id: int):
-    """Average seconds between a buyer message and the seller's reply."""
+    """Average seconds between a buyer message and the seller's reply.
+
+    Bounded scans (a sample is fine for an average) wrapped in a timeout so a
+    slow/hung Mongo never wedges the background analytics loop.
+    """
     try:
         messages = await get_messages_collection()
         convos = await get_conversations_collection()
-        convos = await (
+        convos = await asyncio.wait_for(
             convos.find({"sellerId": seller_id}, {"_id": 1})
-            .to_list(length=1000)
+            .sort([("lastMessageAt", -1)])
+            .limit(200)
+            .to_list(length=200),
+            timeout=5,
         )
         convo_ids = [c["_id"] for c in convos]
         if not convo_ids:
             return None
 
-        docs = await (
+        docs = await asyncio.wait_for(
             messages.find({"conversationId": {"$in": convo_ids}})
             .sort([("createdAt", 1)])
-            .to_list(length=5000)
+            .to_list(length=1000),
+            timeout=5,
         )
         gaps = []
         for prev, cur in zip(docs, docs[1:]):
@@ -111,6 +121,9 @@ async def _compute_response_time(seller_id: int):
         if not gaps:
             return None
         return sum(gaps) / len(gaps)
+    except asyncio.TimeoutError:
+        logger.warning("Response-time computation timed out for seller %s", seller_id)
+        return None
     except Exception as exc:  # noqa: BLE001 — Mongo optional for analytics
         logger.warning("Response-time computation failed: %s", exc)
         return None
@@ -164,6 +177,15 @@ async def compute_all() -> None:
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(SellerProfile.id))
         seller_ids = [row[0] for row in result.all()]
+    start = time.monotonic()
     logger.info("Computing analytics for %d sellers", len(seller_ids))
-    for seller_id in seller_ids:
-        await compute_for_seller(seller_id)
+    # Bounded concurrency: a few sellers at a time so a full pass finishes
+    # quickly without exhausting the DB connection pool.
+    semaphore = asyncio.Semaphore(5)
+
+    async def _run(seller_id: int) -> None:
+        async with semaphore:
+            await compute_for_seller(seller_id)
+
+    await asyncio.gather(*(_run(s) for s in seller_ids))
+    logger.info("Analytics computation finished in %.1fs", time.monotonic() - start)
