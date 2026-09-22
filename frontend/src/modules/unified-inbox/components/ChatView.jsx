@@ -130,6 +130,7 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
             emotion: emotionMap[draft.sentiment_label] || 'Neutral',
             strategy: strategyMap[draft.intent] || 'Educational',
             intent: draft.intent,
+            leadScore: draft.lead_score ?? null,
           });
         }
       } catch (err) {
@@ -198,6 +199,7 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
         emotion: emotionMap[draft.sentiment_label] || 'Neutral',
         strategy: strategyMap[draft.intent] || 'Educational',
         intent: draft.intent,
+        leadScore: draft.lead_score ?? null,
       });
     } catch (err) {
       console.error('Failed to rewrite draft:', err);

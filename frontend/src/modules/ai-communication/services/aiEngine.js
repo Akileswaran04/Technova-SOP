@@ -1,13 +1,26 @@
 /**
- * AI Auto-Reply Engine — Client-side simulation of NeuroChat's backend.
- * In production, this would call the FastAPI backend which uses:
- * - HuggingFace sentiment analysis (bhadresh-savani/distilbert-base-uncased-emotion)
- * - Groq API for response generation
- * - ML strategy predictor
- *
- * For now, we simulate locally with keyword-based emotion detection
- * and template-based response generation.
+ * AI Auto-Reply Engine — helper functions for NeuroChat.
+ * This layer is intentionally small and deterministic so it can be unit-tested
+ * while the real sentiment/draft generation happens through the backend APIs.
  */
+
+export function normalizeNeuroChatConversation(conversation, draftList = []) {
+  const customerName = conversation?.customerName || conversation?.name || 'Customer';
+  const lastMessage = conversation?.lastMessage || conversation?.messages?.at(-1)?.text || 'No message yet';
+  const timestamp = conversation?.lastMessageTime || conversation?.messages?.at(-1)?.timestamp || null;
+
+  return {
+    id: conversation?.id,
+    buyerId: conversation?.buyerId,
+    name: customerName,
+    avatar: customerName.charAt(0).toUpperCase() || '?',
+    lastMessage,
+    timestamp,
+    unreadCount: conversation?.unreadCount || 0,
+    draftCount: draftList.length,
+    latestDraft: draftList[0] || null,
+  };
+}
 
 /* ── Emotion Detection ─────────────────────────────────── */
 

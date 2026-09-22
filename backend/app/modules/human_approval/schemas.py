@@ -31,6 +31,7 @@ class DraftResponse(BaseModel):
     original_message: Optional[str] = None
     intent: Optional[str] = None
     sentiment_label: Optional[str] = None
+    lead_score: Optional[int] = None
     draft_content: str
     status: str = "pending"  # pending | approved | rejected | sent
     created_at: Optional[datetime] = None

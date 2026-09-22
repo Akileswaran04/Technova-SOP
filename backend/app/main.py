@@ -28,8 +28,8 @@ from app.modules.product_listing.router import router as product_listing_router
 from app.modules.unified_inbox.router import router as unified_inbox_router
 from app.modules.unified_inbox.ws import router as ws_router
 from app.modules.unified_inbox.ws import start_realtime_forwarder, stop_realtime_forwarder
-from app.modules.buyer_discovery.router import router as buyer_discovery_router
-from app.modules.buyer_discovery.discovery_router import router as discovery_router
+from app.modules.buyer_discovery.router import router as discovery_router
+from app.modules.customer_management.router import router as customer_management_router
 from app.modules.ai_communication.router import router as ai_communication_router
 from app.modules.human_approval.router import router as human_approval_router
 from app.modules.orders.router import router as orders_router
@@ -47,6 +47,7 @@ logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 ANALYTICS_INTERVAL_SECONDS = 5 * 60  # recompute summaries every 5 minutes
+ANALYTICS_STARTUP_DELAY_SECONDS = 60  # let early requests through before the first heavy pass
 DB_KEEPALIVE_INTERVAL_SECONDS = 60  # keep a scale-to-zero Neon compute warm
 
 
@@ -165,7 +166,14 @@ def create_app() -> FastAPI:
         logger.info("TECHNOVA Backend shutdown complete")
 
     async def _analytics_loop():
-        """Periodically recompute analytics summaries + trust scores."""
+        """Periodically recompute analytics summaries + trust scores.
+
+        Waits a bit before the first run so this expensive, connection-pool-
+        heavy pass doesn't compete with the very first requests right after
+        the server (re)starts — it was previously firing immediately on
+        boot and measurably slowing down early page loads.
+        """
+        await asyncio.sleep(ANALYTICS_STARTUP_DELAY_SECONDS)
         while True:
             try:
                 await compute_all()
@@ -207,7 +215,7 @@ def create_app() -> FastAPI:
     app.include_router(product_listing_router, prefix="/api/v1/products", tags=["Product Listing"])
     app.include_router(unified_inbox_router, prefix="/api/v1/conversations", tags=["Unified Inbox"])
     app.include_router(discovery_router, prefix="/api/v1", tags=["Buyer Discovery"])
-    app.include_router(buyer_discovery_router, prefix="/api/v1/customers", tags=["Customer Management"])
+    app.include_router(customer_management_router, prefix="/api/v1/customers", tags=["Customer Management"])
     app.include_router(ai_communication_router, prefix="/api/v1/ai", tags=["AI Communication"])
     app.include_router(human_approval_router, prefix="/api/v1", tags=["Human Approval"])
     app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])

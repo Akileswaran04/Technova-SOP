@@ -4,9 +4,9 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.buyer_discovery.repository import CustomerRepository
+from app.modules.customer_management.repository import CustomerRepository
 from app.modules.seller_profile.models import SellerProfile
-from app.modules.buyer_discovery.schemas import CustomerCreate, CustomerUpdate
+from app.modules.customer_management.schemas import CustomerCreate, CustomerUpdate
 from app.core.exceptions import NotFoundException
 
 

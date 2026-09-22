@@ -3,20 +3,11 @@
  * Integrates AutoReplyToggle, AIDraft, and aiEngine service.
  * Provides live message simulation, AI config, and performance stats.
  */
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { analyzeMessage } from '../services/aiEngine';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { analyzeMessage, normalizeNeuroChatConversation } from '../services/aiEngine';
+import { getConversations, listConversationDrafts, generateDraft, sendDraft, editDraft } from '../../../services/storage';
 import AutoReplyToggle from './AutoReplyToggle';
 import AIDraft from './AIDraft';
-
-/* ── Mock buyer messages for simulation ────────────────── */
-
-const mockBuyers = [
-  { id: 'b1', name: 'GreenMart Retail', avatar: 'G', lastMessage: 'Hi! I\'m interested in bulk ordering your organic products. Can you share the wholesale price list?' },
-  { id: 'b2', name: 'Apex Distributors', avatar: 'A', lastMessage: 'The last shipment arrived damaged. I need this resolved ASAP — this is unacceptable.' },
-  { id: 'b3', name: 'Metro Wholesale', avatar: 'M', lastMessage: 'I\'m considering switching to your brand but I\'m not sure about the quality. Do you have samples?' },
-  { id: 'b4', name: 'Nova Supplies', avatar: 'N', lastMessage: 'Wow, the new collection is amazing! I\'d love to feature it in our store. What\'s the best deal for 100 units?' },
-  { id: 'b5', name: 'Urban Basket', avatar: 'U', lastMessage: 'Can you explain how your products compare to competitors? I\'m hesitant about making the switch.' },
-];
 
 const toneOptions = ['Professional', 'Friendly', 'Casual', 'Formal'];
 const lengthOptions = ['Short', 'Medium', 'Detailed'];
@@ -67,90 +58,194 @@ export default function AICommsTab({ sellerId, onToast }) {
   const [autoMode, setAutoMode] = useState('approval');
   const [drafts, setDrafts] = useState([]);
   const [stats, setStats] = useState({
-    messagesProcessed: 247,
-    responsesGenerated: 231,
-    approvalRate: 89,
-    avgResponseTime: '12s',
+    messagesProcessed: 0,
+    draftsGenerated: 0,
+    sentCount: 0,
   });
 
   // AI settings
   const [tone, setTone] = useState('Professional');
   const [length, setLength] = useState('Medium');
   const [showSettings, setShowSettings] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Pending messages (simulated inbox)
-  const [pendingMessages, setPendingMessages] = useState(mockBuyers);
+  // Pending messages pulled from the real seller inbox / MongoDB conversations.
+  const [pendingMessages, setPendingMessages] = useState([]);
 
-  const handleGenerateDraft = useCallback((buyer) => {
-    const analysis = analyzeMessage(buyer.lastMessage);
-    const draft = {
-      id: `draft-${Date.now()}`,
-      buyerId: buyer.id,
-      buyerName: buyer.name,
-      buyerMessage: buyer.lastMessage,
-      ...analysis,
-      timestamp: new Date().toISOString(),
-    };
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const conversations = await getConversations();
+        if (cancelled) return;
 
-    setDrafts(prev => [draft, ...prev]);
+        const normalized = await Promise.all(
+          conversations.map(async (conversation) => {
+            const draftList = await listConversationDrafts(conversation.id);
+            const normalizedConversation = normalizeNeuroChatConversation(conversation, draftList);
+            return {
+              ...normalizedConversation,
+              draftList,
+            };
+          })
+        );
 
-    // Remove from pending if auto-reply is on
-    if (autoReplyEnabled && autoMode === 'auto') {
-      setPendingMessages(prev => prev.filter(m => m.id !== buyer.id));
-      setStats(prev => ({
-        ...prev,
-        messagesProcessed: prev.messagesProcessed + 1,
-        responsesGenerated: prev.responsesGenerated + 1,
-      }));
-      onToast(`AI auto-replied to ${buyer.name}`, 'success');
+        const realPending = normalized
+          .filter((item) => item.id)
+          .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+        const allRawDrafts = realPending.flatMap((conversation) => {
+          const draftList = Array.isArray(conversation.draftList) ? conversation.draftList : [];
+          return draftList.map((draft) => ({ draft, conversation }));
+        });
+
+        // Only pending drafts show in the review queue — sent/rejected ones
+        // still count toward the stats below.
+        const allDrafts = allRawDrafts
+          .filter(({ draft }) => (draft.status || 'pending') === 'pending')
+          .map(({ draft, conversation }) => ({
+            id: draft.id,
+            buyerId: conversation.id,
+            buyerName: conversation.name,
+            buyerMessage: draft.original_message || conversation.lastMessage,
+            response: draft.draft_content || draft.response || 'Draft pending review',
+            emotion: draft.sentiment_label || 'Neutral',
+            strategy: draft.intent || 'Educational',
+            leadScore: draft.lead_score ?? null,
+            timestamp: draft.created_at || new Date().toISOString(),
+          }));
+
+        const sentCount = allRawDrafts.filter(({ draft }) => draft.status === 'sent').length;
+
+        setPendingMessages(realPending);
+        setDrafts(allDrafts);
+        setStats((prev) => ({
+          ...prev,
+          messagesProcessed: realPending.reduce((sum, item) => sum + (item.unreadCount || 0), 0) || realPending.length,
+          draftsGenerated: allRawDrafts.length,
+          sentCount,
+        }));
+      } catch (err) {
+        console.error('Failed to load NeuroChat conversations:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [sellerId]);
+
+  const handleGenerateDraft = useCallback(async (buyer) => {
+    try {
+      const draft = await generateDraft(buyer.id);
+      const nextDraft = {
+        id: draft.id,
+        buyerId: buyer.id,
+        buyerName: buyer.name,
+        buyerMessage: draft.original_message || buyer.lastMessage,
+        response: draft.draft_content,
+        emotion: draft.sentiment_label || 'Neutral',
+        strategy: draft.intent || 'Educational',
+        leadScore: draft.lead_score ?? null,
+        timestamp: draft.created_at || new Date().toISOString(),
+      };
+
+      setDrafts((prev) => [nextDraft, ...prev.filter((item) => item.id !== draft.id)]);
+      setStats((prev) => ({ ...prev, draftsGenerated: prev.draftsGenerated + 1 }));
+      onToast(`AI draft ready for ${buyer.name}`, 'success');
+    } catch (err) {
+      console.error('Failed to generate draft from live conversation:', err);
+      const analysis = analyzeMessage(buyer.lastMessage);
+      const draft = {
+        id: `draft-${Date.now()}`,
+        buyerId: buyer.id,
+        buyerName: buyer.name,
+        buyerMessage: buyer.lastMessage,
+        ...analysis,
+        timestamp: new Date().toISOString(),
+      };
+      setDrafts((prev) => [draft, ...prev]);
+      onToast('Generated draft locally while the backend processed the request', 'warning');
     }
-  }, [autoReplyEnabled, autoMode, onToast]);
-
-  const handleAcceptDraft = useCallback((draftId, response) => {
-    const draft = drafts.find(d => d.id === draftId);
-    setDrafts(prev => prev.filter(d => d.id !== draftId));
-    setPendingMessages(prev => prev.filter(m => m.id !== draft?.buyerId));
-    setStats(prev => ({
-      ...prev,
-      messagesProcessed: prev.messagesProcessed + 1,
-      responsesGenerated: prev.responsesGenerated + 1,
-      approvalRate: Math.min(prev.approvalRate + 1, 100),
-    }));
-    onToast(`Response sent to ${draft?.buyerName}`, 'success');
-  }, [drafts, onToast]);
-
-  const handleEditDraft = useCallback((draftId, editedText) => {
-    setDrafts(prev => prev.map(d =>
-      d.id === draftId ? { ...d, response: editedText } : d
-    ));
-    onToast('Draft updated', 'success');
   }, [onToast]);
 
-  const handleRewriteDraft = useCallback((draftId) => {
-    const draft = drafts.find(d => d.id === draftId);
+  const handleAcceptDraft = useCallback(async (draftId, response) => {
+    const draft = drafts.find((item) => item.id === draftId);
+    try {
+      await sendDraft(draftId);
+      setDrafts((prev) => prev.filter((item) => item.id !== draftId));
+      setPendingMessages((prev) => prev.filter((message) => message.id !== draft?.buyerId));
+      setStats((prev) => ({ ...prev, sentCount: prev.sentCount + 1 }));
+      onToast(`Response sent to ${draft?.buyerName}`, 'success');
+    } catch (err) {
+      console.error('Failed to send approved draft:', err);
+      onToast('Failed to send the approved draft', 'error');
+    }
+  }, [drafts, onToast]);
+
+  const handleEditDraft = useCallback(async (draftId, editedText) => {
+    try {
+      const draft = drafts.find((item) => item.id === draftId);
+      if (draft && draft.id.startsWith('draft-')) {
+        setDrafts((prev) => prev.map((item) => item.id === draftId ? { ...item, response: editedText } : item));
+      } else {
+        await editDraft(draftId, editedText);
+        setDrafts((prev) => prev.map((item) => item.id === draftId ? { ...item, response: editedText } : item));
+      }
+      onToast('Draft updated', 'success');
+    } catch (err) {
+      console.error('Failed to update draft:', err);
+      onToast('Failed to update the draft', 'error');
+    }
+  }, [drafts, onToast]);
+
+  const handleRewriteDraft = useCallback(async (draftId) => {
+    const draft = drafts.find((item) => item.id === draftId);
     if (!draft) return;
-    const newAnalysis = analyzeMessage(draft.buyerMessage);
-    setDrafts(prev => prev.map(d =>
-      d.id === draftId ? { ...d, response: newAnalysis.response } : d
-    ));
-    onToast('Draft rewritten', 'success');
+    try {
+      const nextDraft = await generateDraft(draft.buyerId);
+      setDrafts((prev) => prev.map((item) => item.id === draftId ? {
+        ...item,
+        response: nextDraft.draft_content,
+        emotion: nextDraft.sentiment_label || item.emotion,
+        strategy: nextDraft.intent || item.strategy,
+        timestamp: nextDraft.created_at || new Date().toISOString(),
+      } : item));
+      onToast('Draft rewritten', 'success');
+    } catch (err) {
+      console.error('Failed to rewrite draft:', err);
+      const newAnalysis = analyzeMessage(draft.buyerMessage);
+      setDrafts((prev) => prev.map((item) => item.id === draftId ? { ...item, ...newAnalysis } : item));
+      onToast('Local rewrite applied', 'warning');
+    }
   }, [drafts, onToast]);
 
   const handleDismissDraft = useCallback((draftId) => {
-    setDrafts(prev => prev.filter(d => d.id !== draftId));
+    setDrafts((prev) => prev.filter((item) => item.id !== draftId));
   }, []);
 
-  // Auto-generate drafts when auto-reply is enabled
+  // Auto-generate drafts when auto-reply is enabled; if there are real drafts already,
+  // the backend is the source of truth and the mock is left out.
   useEffect(() => {
     if (!autoReplyEnabled || autoMode !== 'auto' || pendingMessages.length === 0) return;
 
     const timer = setTimeout(() => {
       const buyer = pendingMessages[0];
       handleGenerateDraft(buyer);
-    }, 1500);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [autoReplyEnabled, autoMode, pendingMessages, handleGenerateDraft]);
+
+  const approvalRate = stats.draftsGenerated
+    ? Math.round((stats.sentCount / stats.draftsGenerated) * 100)
+    : 0;
+
+  const avgLeadScore = useMemo(() => {
+    const scored = drafts.filter((d) => typeof d.leadScore === 'number');
+    if (!scored.length) return null;
+    return Math.round(scored.reduce((sum, d) => sum + d.leadScore, 0) / scored.length);
+  }, [drafts]);
 
   return (
     <div className="space-y-5">
@@ -176,9 +271,9 @@ export default function AICommsTab({ sellerId, onToast }) {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon="chat" label="Messages analyzed" value={stats.messagesProcessed.toLocaleString()} color="bg-blue-50 text-blue-600" />
-        <StatCard icon="send" label="Responses sent" value={stats.responsesGenerated.toLocaleString()} color="bg-emerald-50 text-emerald-600" />
-        <StatCard icon="thumb_up" label="Approval rate" value={`${stats.approvalRate}%`} color="bg-purple-50 text-purple-600" />
-        <StatCard icon="speed" label="Avg response time" value={stats.avgResponseTime} color="bg-amber-50 text-amber-600" />
+        <StatCard icon="send" label="Responses sent" value={stats.sentCount.toLocaleString()} color="bg-emerald-50 text-emerald-600" />
+        <StatCard icon="thumb_up" label="Approval rate" value={`${approvalRate}%`} color="bg-purple-50 text-purple-600" />
+        <StatCard icon="trending_up" label="Avg lead score" value={avgLeadScore == null ? '—' : `${avgLeadScore}/100`} color="bg-amber-50 text-amber-600" />
       </div>
 
       {/* Auto-Reply Toggle + Settings */}

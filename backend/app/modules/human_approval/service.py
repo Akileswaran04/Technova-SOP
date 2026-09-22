@@ -69,7 +69,7 @@ class HumanApprovalService:
             raise ValidationException("No messages to draft a reply to")
 
         original = last.get("content", "")
-        analysis = analyze_message(original)
+        analysis = await analyze_message(original)
 
         draft = await self.draft_repo.create({
             "conversationId": ObjectId(conversation_id),
@@ -78,6 +78,7 @@ class HumanApprovalService:
             "originalMessage": original,
             "intent": analysis["intent"],
             "sentimentLabel": analysis["label"],
+            "leadScore": analysis["lead_score"],
             "draftContent": analysis["draft"],
         })
         return self._to_response(draft)
@@ -146,6 +147,7 @@ class HumanApprovalService:
             "original_message": draft.get("originalMessage"),
             "intent": draft.get("intent"),
             "sentiment_label": draft.get("sentimentLabel"),
+            "lead_score": draft.get("leadScore"),
             "draft_content": draft.get("draftContent"),
             "status": draft.get("status", "pending"),
             "created_at": draft.get("createdAt"),

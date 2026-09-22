@@ -5,11 +5,11 @@ from typing import List
 from fastapi import APIRouter, Depends, status
 
 from app.core.dependencies import get_current_user_id
-from app.modules.buyer_discovery.dependencies import get_customer_service
-from app.modules.buyer_discovery.schemas import (
+from app.modules.customer_management.dependencies import get_customer_service
+from app.modules.customer_management.schemas import (
     CustomerCreate, CustomerUpdate, CustomerResponse,
 )
-from app.modules.buyer_discovery.service import CustomerService
+from app.modules.customer_management.service import CustomerService
 
 router = APIRouter()
 

@@ -297,6 +297,15 @@ export async function markAsRead(conversationId) {
 
 // ── Human approval: AI drafts (seller reviews before send) ──
 
+export async function listConversationDrafts(conversationId) {
+  try {
+    const data = await api.get(`/conversations/${conversationId}/drafts`);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function generateDraft(conversationId) {
   return await api.post(`/conversations/${conversationId}/drafts`);
 }
