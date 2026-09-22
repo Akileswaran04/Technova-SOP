@@ -19,6 +19,7 @@ export const TAB_KEYS = {
   PRODUCTS: 'products',
   INVENTORY: 'inventory',
   INBOX: 'inbox',
+  NEUROCHAT: 'neurochat',
   CUSTOMERS: 'customers',
   ANALYTICS: 'analytics',
   PROFILE: 'profile',
@@ -42,6 +43,12 @@ const MODULES = [
     icon: 'chat',
     label: 'Inbox',
     description: 'Unified messaging with AI-powered auto-reply',
+  },
+  {
+    key: TAB_KEYS.NEUROCHAT,
+    icon: 'smart_toy',
+    label: 'NeuroChat AI',
+    description: 'Seller-only AI response engine for buyer inquiries',
   },
   {
     key: TAB_KEYS.CUSTOMERS,

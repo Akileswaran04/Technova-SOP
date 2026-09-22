@@ -5,10 +5,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.modules.buyer_discovery.dependencies import get_discovery_service
-from app.modules.buyer_discovery.discovery_schemas import (
+from app.modules.buyer_discovery.schemas import (
     DiscoveryResponse, SellerPublicResponse,
 )
-from app.modules.buyer_discovery.discovery_service import DiscoveryService
+from app.modules.buyer_discovery.service import DiscoveryService
 from app.modules.product_listing.service import ProductService
 from app.modules.product_listing.dependencies import get_product_service
 

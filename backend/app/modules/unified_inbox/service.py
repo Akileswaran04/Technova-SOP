@@ -1,9 +1,10 @@
 """Unified Inbox Service — business logic layer (MongoDB-backed)."""
+import asyncio
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from app.infrastructure.redis.realtime import RealtimeService
 from app.infrastructure.mongodb.chat import get_conversations_collection, utcnow
@@ -15,12 +16,25 @@ from app.modules.buyer_profile.models import BuyerProfile
 from app.modules.unified_inbox.schemas import ConversationCreate, MessageCreate
 from app.modules.ai_communication.sentiment import analyze_message
 from app.core.exceptions import NotFoundException, ForbiddenException, ValidationException
+from app.core.logging import logger
+
+# Sentiment analysis (Groq) runs after the message is already saved/delivered
+# so sending a chat message never waits on an LLM call. Tasks are kept in a
+# module-level set — asyncio only holds a weak ref to a bare create_task().
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 def _display_name(profile: BuyerProfile) -> Optional[str]:
     """Best-effort buyer display name; falls back to account full_name/email.
 
-    Assumes BuyerProfile.user was eagerly loaded (selectinload) by the caller.
+    Assumes BuyerProfile.user was eagerly loaded (joinedload) by the caller.
     """
     name = f"{profile.first_name} {profile.last_name}".strip()
     if name:
@@ -77,7 +91,7 @@ class InboxService:
         result = await self.db.execute(
             select(BuyerProfile)
             .where(BuyerProfile.id.in_(ids))
-            .options(selectinload(BuyerProfile.user))
+            .options(joinedload(BuyerProfile.user))
         )
         profiles = result.scalars().all()
         return {p.id: _display_name(p) for p in profiles}
@@ -218,7 +232,6 @@ class InboxService:
                 return self._msg_response(existing)
 
         sequence = await self.msg_repo.next_sequence(conversation_id)
-        sentiment = analyze_message(data.content)
 
         doc = {
             "conversationId": convo["_id"],
@@ -228,7 +241,7 @@ class InboxService:
             "content": data.content,
             "messageType": data.message_type,
             "source": data.source,
-            "sentiment": sentiment,
+            "sentiment": None,
             "sequenceNumber": sequence,
             "attachments": data.attachments,
             "createdAt": utcnow(),
@@ -245,14 +258,31 @@ class InboxService:
         await self.convo_repo.update_last_message(conversation_id, data.content, recipient_id)
         await self.convo_repo.increment_unread(conversation_id, recipient_id)
 
-        # Realtime delivery via Redis pub/sub
+        # Realtime delivery via Redis pub/sub — fires immediately, sentiment
+        # is not on the critical path (see _enrich_sentiment below).
         payload = {"message": self._msg_response(saved)}
         await RealtimeService.publish(conversation_id, "message:new", payload)
         await RealtimeService.publish(
             f"user:{recipient_id}", "message:new", {"conversation_id": conversation_id}
         )
 
+        _spawn(self._enrich_sentiment(conversation_id, saved["_id"], data.content))
+
         return self._msg_response(saved)
+
+    async def _enrich_sentiment(self, conversation_id: str, message_id, content: str) -> None:
+        """Background: run AI sentiment/draft analysis after the message is
+        already sent, and patch it onto the stored message once ready."""
+        try:
+            sentiment = await analyze_message(content)
+            await self.msg_repo.update_sentiment(message_id, sentiment)
+            await RealtimeService.publish(
+                conversation_id,
+                "message:sentiment",
+                {"message_id": str(message_id), "sentiment": sentiment},
+            )
+        except Exception:
+            logger.warning("Background sentiment enrichment failed", exc_info=True)
 
     def _msg_response(self, doc: dict) -> dict:
         serialized = serialize(doc)

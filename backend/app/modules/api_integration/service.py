@@ -212,7 +212,7 @@ class IntegrationService:
                 "content": content,
                 "messageType": "text",
                 "source": service,
-                "sentiment": analyze_message(content),
+                "sentiment": await analyze_message(content),
                 "sequenceNumber": sequence,
                 "attachments": [],
                 "createdAt": utcnow(),

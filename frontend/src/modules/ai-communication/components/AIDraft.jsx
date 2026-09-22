@@ -64,7 +64,7 @@ export default function AIDraft({ draft, onAccept, onEdit, onRewrite, onDismiss 
         </span>
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-medium text-on-surface-variant bg-surface-container">
           <span className="material-symbols-outlined text-[14px]">trending_up</span>
-          Lead: {draft.leadScore}/100
+          {typeof draft.leadScore === 'number' ? `Lead: ${draft.leadScore}/100` : 'Lead: —'}
         </span>
       </div>
 

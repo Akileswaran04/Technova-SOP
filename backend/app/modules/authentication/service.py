@@ -8,7 +8,7 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from app.modules.seller_profile.models import User, SellerProfile
 from app.modules.buyer_profile.models import BuyerProfile
@@ -108,7 +108,7 @@ class AuthService:
         result = await self.db.execute(
             select(User)
             .where(User.email == email)
-            .options(selectinload(User.seller_profile), selectinload(User.buyer_profile))
+            .options(joinedload(User.seller_profile), joinedload(User.buyer_profile))
         )
         user = result.scalar_one_or_none()
         if not user or not user.is_active:
@@ -124,7 +124,7 @@ class AuthService:
             .where(
                 (User.email == data.identifier) | (User.phone == data.identifier)
             )
-            .options(selectinload(User.seller_profile), selectinload(User.buyer_profile))
+            .options(joinedload(User.seller_profile), joinedload(User.buyer_profile))
         )
         user = result.scalar_one_or_none()
 
@@ -150,7 +150,8 @@ class AuthService:
         """Build the standard token response for a user.
 
         Profiles are resolved from the eager-loaded relationships on `user`
-        (set up by the caller's selectinload) — no extra queries.
+        (set up by the caller's joinedload — a single joined query instead of
+        a separate round trip per relationship) — no extra queries.
         """
         if user.role == "seller" and seller_id is None:
             profile = user.seller_profile
@@ -181,7 +182,7 @@ class AuthService:
         result = await self.db.execute(
             select(User)
             .where(User.id == user_id)
-            .options(selectinload(User.seller_profile), selectinload(User.buyer_profile))
+            .options(joinedload(User.seller_profile), joinedload(User.buyer_profile))
         )
         return result.scalar_one_or_none()
 

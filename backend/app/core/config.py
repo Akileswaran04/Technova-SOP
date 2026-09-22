@@ -6,11 +6,14 @@ DATABASE_URL/MONGODB_URL/REDIS_URL in the process environment can't silently
 win over the checked-in local config.
 """
 
+from pathlib import Path
 from typing import List, Optional
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
-load_dotenv(override=True)
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=True)
 
 
 class Settings(BaseSettings):
@@ -42,6 +45,10 @@ class Settings(BaseSettings):
 
     # Public base URL (OAuth redirects / demo links)
     PUBLIC_BASE_URL: str = "http://localhost:8000"
+
+    # External AI providers
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     # External integrations — Gmail / Microsoft Graph OAuth (empty = mock mode)
     GMAIL_CLIENT_ID: Optional[str] = None

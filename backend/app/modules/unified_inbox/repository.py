@@ -212,3 +212,10 @@ class MessageRepository:
             {"_id": ObjectId(message_id)},
             {"$set": {"isAiGenerated": True}},
         )
+
+    async def update_sentiment(self, message_id, sentiment: dict) -> None:
+        messages = await get_messages_collection()
+        await messages.update_one(
+            {"_id": ObjectId(message_id) if isinstance(message_id, str) else message_id},
+            {"$set": {"sentiment": sentiment}},
+        )

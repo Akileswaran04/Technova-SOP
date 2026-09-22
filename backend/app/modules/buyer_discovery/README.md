@@ -1,74 +1,31 @@
 # Buyer Discovery Module
 
-**Status**: NOT IMPLEMENTED (Planned for M4)
+**Status**: Core search implemented; personalization/ML features planned.
 
 ## Overview
-Connects sellers with relevant buyers through intelligent search, filtering, and recommendation algorithms. Enables buyer-initiated discovery of products and sellers.
+Buyer-facing product and seller discovery: search/filter products, view public
+seller profiles, and browse a seller's catalog. Unauthenticated (public)
+endpoints — this is what buyers see before/without logging in.
 
-## Responsibilities
-- Product search and filtering
-- Buyer preferences management
-- Personalized recommendations
-- Location-based discovery
-- Search ranking (trust-based, popularity-based)
-- Seller discovery and comparison
-- Saved searches and watchlists
-- Search analytics
+Seller-side CRM (a seller's own list of buyer contacts) lives in the separate
+[`customer_management`](../customer_management/README.md) module — the two
+used to share this folder under confusingly similar names
+(`buyer_discovery_router` was actually the customer-management router) and
+were split apart for clarity.
 
-## Planned API Endpoints
+## Implemented API Endpoints
 ```
-# Product Discovery
-GET    /api/v1/buyers/discover             - Get personalized recommendations
-GET    /api/v1/search                      - Search products and sellers
-GET    /api/v1/sellers/{id}                - View seller profile (buyer)
-GET    /api/v1/sellers/{id}/products       - View seller products
-GET    /api/v1/products/trending           - Get trending products
-GET    /api/v1/products/new                - Get new arrivals
-
-# Preferences
-GET    /api/v1/buyers/me/preferences       - Get my preferences
-PUT    /api/v1/buyers/me/preferences       - Update preferences
-POST   /api/v1/buyers/me/saved-searches    - Save search
-GET    /api/v1/buyers/me/saved-searches    - List saved searches
-
-# Watchlist
-POST   /api/v1/buyers/me/watchlist         - Add to watchlist
-GET    /api/v1/buyers/me/watchlist         - Get watchlist
-DELETE /api/v1/buyers/me/watchlist/{id}    - Remove from watchlist
-
-# Reviews & Ratings
-GET    /api/v1/sellers/{id}/reviews        - Get seller reviews
-GET    /api/v1/products/{id}/reviews       - Get product reviews
+GET  /api/v1/discover                  - Search/filter products (category, location, budget, q)
+GET  /api/v1/sellers/{seller_id}       - Public seller profile with trust score
+GET  /api/v1/sellers/{seller_id}/products - Public product list for a seller
 ```
 
 ## Database
-**Primary**: PostgreSQL
-**Secondary**: Elasticsearch (future) - Full-text search
+**Primary**: PostgreSQL (via `product_listing` and `seller_profile` models)
 
-### Tables
-- `buyer_profiles` - Buyer information
-- `search_history` (future) - Track search queries
-- `wishlist` (future) - Saved products
-- `seller_ratings_cache` (future) - Cached seller metrics
-
-## External Integrations
-- **Search Engine** (Elasticsearch/future) - Full-text product search
-- **Recommendation Engine** (future) - ML-based product recommendations
-- **Analytics** - Track search behavior and conversion
-
-## Key Features
-- Full-text search across products
-- Faceted filtering (category, price, rating, etc.)
-- Personalized recommendations based on browsing history
-- Saved searches and watchlists
-- Related products and sellers
-- Search suggestions and autocomplete (future)
-
-## Future Enhancements
-- Machine learning-based recommendations
-- AI-powered search suggestions
-- Location-aware pricing
-- Seller comparison tool
-- Price history and alerts
-- Inventory availability notifications
+## Planned / Future Enhancements
+- Full-text search (Elasticsearch)
+- Buyer preferences, saved searches, watchlists
+- ML-based personalized recommendations
 - Search analytics for sellers
+- Trending / new-arrivals endpoints

@@ -10,20 +10,34 @@ import OnboardingForm from './components/OnboardingForm';
 import SellerHeader from './components/SellerHeader';
 import BottomNav from './components/BottomNav';
 import Sidebar from './components/Sidebar';
-import { ProductGrid } from './modules/product-listing';
-import { InventoryTable } from './modules/product-listing/components/inventory';
-import { InboxTab } from './modules/unified-inbox';
-import { CustomerList } from './modules/buyer-discovery';
-import { ProfileForm } from './modules/seller-profile';
 import { TAB_KEYS } from './modules/MODULES';
 import Toast from './components/shared/Toast';
 import './index.css';
 
 // Heavy, role- or tab-specific screens are code-split so they only download
-// when actually used (buyer app: buyers only; analytics: pulls in recharts).
+// when actually used — this keeps the login screen's initial bundle small
+// instead of shipping every seller-dashboard tab up front.
 const BuyerApp = lazy(() => import('./modules/buyer/BuyerApp'));
 const AnalyticsTab = lazy(() =>
   import('./modules/analytics').then((m) => ({ default: m.AnalyticsTab }))
+);
+const ProductGrid = lazy(() =>
+  import('./modules/product-listing').then((m) => ({ default: m.ProductGrid }))
+);
+const InventoryTable = lazy(() =>
+  import('./modules/product-listing/components/inventory').then((m) => ({ default: m.InventoryTable }))
+);
+const InboxTab = lazy(() =>
+  import('./modules/unified-inbox').then((m) => ({ default: m.InboxTab }))
+);
+const CustomerList = lazy(() =>
+  import('./modules/customer-management').then((m) => ({ default: m.CustomerList }))
+);
+const ProfileForm = lazy(() =>
+  import('./modules/seller-profile').then((m) => ({ default: m.ProfileForm }))
+);
+const AICommsTab = lazy(() =>
+  import('./modules/ai-communication').then((m) => ({ default: m.AICommsTab }))
 );
 
 function FullScreenLoading() {
@@ -64,18 +78,23 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const sellerData = await getSellerById();
-        if (cancelled) return;
-        setSeller(sellerData);
-        if (!sellerData?.id) return;
-        // Products load page-by-page: the first page unlocks the dashboard and
-        // later pages append in the background instead of one giant response.
+        // Seller profile and product catalog are independent requests (both
+        // scoped server-side by the JWT) — fire them in parallel instead of
+        // waiting for the profile before even starting the catalog fetch.
+        // Products load page-by-page: the first page unlocks the dashboard
+        // and later pages append in the background.
         let unlocked = false;
-        await getProductsBySeller((page) => {
+        const productsPromise = getProductsBySeller((page) => {
           if (cancelled) return;
           setProducts((prev) => [...prev, ...page]);
           if (!unlocked) { unlocked = true; setLoading(false); }
         });
+
+        const sellerData = await getSellerById();
+        if (cancelled) return;
+        setSeller(sellerData);
+
+        await productsPromise;
       } catch (err) {
         console.error('Failed to load seller:', err);
         clearSession();
@@ -262,26 +281,29 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === TAB_KEYS.PRODUCTS && (
-          <ProductGrid products={products} sellerId={seller.id} onUpdate={refreshProducts} onToast={showToast} />
-        )}
-        {activeTab === TAB_KEYS.INVENTORY && (
-          <InventoryTable products={products} onUpdate={refreshProducts} onToast={showToast} />
-        )}
-        {activeTab === TAB_KEYS.INBOX && (
-          <InboxTab sellerId={seller.id} onToast={showToast} onRefresh={refreshUnread} />
-        )}
-        {activeTab === TAB_KEYS.CUSTOMERS && (
-          <CustomerList sellerId={seller.id} products={products} onUpdate={refreshProducts} onToast={showToast} />
-        )}
-        {activeTab === TAB_KEYS.ANALYTICS && (
-          <Suspense fallback={<FullScreenLoading />}>
+        <Suspense fallback={<FullScreenLoading />}>
+          {activeTab === TAB_KEYS.PRODUCTS && (
+            <ProductGrid products={products} sellerId={seller.id} onUpdate={refreshProducts} onToast={showToast} />
+          )}
+          {activeTab === TAB_KEYS.INVENTORY && (
+            <InventoryTable products={products} onUpdate={refreshProducts} onToast={showToast} />
+          )}
+          {activeTab === TAB_KEYS.INBOX && (
+            <InboxTab sellerId={seller.id} onToast={showToast} onRefresh={refreshUnread} />
+          )}
+          {activeTab === TAB_KEYS.NEUROCHAT && (
+            <AICommsTab sellerId={seller.id} onToast={showToast} />
+          )}
+          {activeTab === TAB_KEYS.CUSTOMERS && (
+            <CustomerList sellerId={seller.id} products={products} onUpdate={refreshProducts} onToast={showToast} />
+          )}
+          {activeTab === TAB_KEYS.ANALYTICS && (
             <AnalyticsTab sellerId={seller.id} onToast={showToast} />
-          </Suspense>
-        )}
-        {activeTab === TAB_KEYS.PROFILE && (
-          <ProfileForm seller={seller} products={products} onSellerUpdate={handleSellerUpdate} onToast={showToast} />
-        )}
+          )}
+          {activeTab === TAB_KEYS.PROFILE && (
+            <ProfileForm seller={seller} products={products} onSellerUpdate={handleSellerUpdate} onToast={showToast} />
+          )}
+        </Suspense>
 
       </main>
 
