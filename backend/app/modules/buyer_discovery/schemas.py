@@ -1,40 +1,44 @@
-"""Pydantic schemas for buyer discovery module."""
+"""Pydantic schemas for buyer-facing discovery search."""
 from datetime import datetime
 from typing import Optional, List
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
-class CustomerCreate(BaseModel):
-    """Create a customer record."""
-    name: str = Field(..., min_length=1, max_length=255)
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    total_orders: int = Field(0, ge=0)
-    last_order_date: Optional[datetime] = None
-
-
-class CustomerUpdate(BaseModel):
-    """Update a customer record."""
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    total_orders: Optional[int] = Field(None, ge=0)
-    last_order_date: Optional[datetime] = None
-
-
-class CustomerResponse(BaseModel):
-    """Customer response."""
+class SellerPublicResponse(BaseModel):
+    """Public seller profile shown to buyers."""
     id: int
-    seller_id: int
-    name: str
-    email: Optional[str]
-    phone: Optional[str]
-    total_orders: int
-    last_order_date: Optional[datetime]
-    created_at: datetime
-    updated_at: datetime
+    business_name: str
+    business_type: Optional[str]
+    description: Optional[str]
+    city: Optional[str]
+    country: Optional[str]
+    verification_status: Optional[str]
+    trust_score: Optional[float] = None
+    product_count: int = 0
+    created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+
+class ProductSearchItem(BaseModel):
+    """A product result in discovery search, with seller + trust badge."""
+    id: int
+    name: str
+    description: Optional[str]
+    category: Optional[str]
+    price: float
+    image_url: Optional[str]
+    stock: int
+    seller_id: int
+    seller_name: Optional[str]
+    seller_city: Optional[str]
+    seller_verification_status: Optional[str]
+    trust_score: Optional[float] = None
+
+
+class DiscoveryResponse(BaseModel):
+    """Discovery search results with cursor pagination."""
+    items: List[ProductSearchItem]
+    total: int
+    next_cursor: Optional[str] = None
+    limit: int

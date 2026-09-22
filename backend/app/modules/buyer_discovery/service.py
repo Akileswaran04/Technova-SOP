@@ -1,61 +1,142 @@
-"""Buyer Discovery Service — business logic layer."""
+"""Buyer Discovery Service — search sellers & products for buyers.
 
+Same Input → Filter → Match → List flow as the seller-facing module,
+exposed here as a buyer-facing search. Results are cached in Redis
+(short TTL) since they are read-heavy and rarely stale.
+"""
+import hashlib
+import json
+from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.buyer_discovery.repository import CustomerRepository
-from app.modules.seller_profile.models import SellerProfile
-from app.modules.buyer_discovery.schemas import CustomerCreate, CustomerUpdate
+from app.infrastructure.redis import RedisClient
+from app.modules.seller_profile.models import Product, SellerProfile
+from app.modules.analytics.models import TrustScore
 from app.core.exceptions import NotFoundException
 
 
-class CustomerService:
-    """Business logic for buyer discovery / customer management."""
+class DiscoveryService:
+    """Business logic for buyer-facing discovery."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.customer_repo = CustomerRepository(db)
 
-    async def _get_seller_id_from_user(self, user_id: int) -> int:
-        """Resolve seller_profile UUID from user UUID."""
+    def _cache_key(self, category: Optional[str], location: Optional[str],
+                   budget: Optional[float], q: Optional[str], limit: int, offset: int) -> str:
+        raw = json.dumps([category, location, budget, q, limit, offset])
+        digest = hashlib.sha256(raw.encode()).hexdigest()[:16]
+        return f"cache:discover:{digest}"
+
+    async def search_products(
+        self,
+        category: Optional[str] = None,
+        location: Optional[str] = None,
+        budget: Optional[float] = None,
+        q: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """Search products with seller + trust score info (Redis-cached)."""
+        cache_key = self._cache_key(category, location, budget, q, limit, offset)
+        cached = await RedisClient.get_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        filters = []
+        if category:
+            filters.append(Product.category == category)
+        if budget is not None and budget > 0:
+            filters.append(Product.price <= budget)
+        if q:
+            like = f"%{q}%"
+            filters.append(
+                or_(Product.name.ilike(like), Product.description.ilike(like))
+            )
+        if location:
+            filters.append(SellerProfile.city.ilike(f"%{location}%"))
+
+        # Count total (unpaginated)
+        count_result = await self.db.execute(
+            select(func.count(Product.id)).select_from(Product).join(
+                SellerProfile, Product.seller_id == SellerProfile.id
+            ).where(*filters)
+        )
+        total = count_result.scalar() or 0
+
         result = await self.db.execute(
-            select(SellerProfile).where(SellerProfile.user_id == user_id)
+            select(
+                Product,
+                SellerProfile.business_name,
+                SellerProfile.city,
+                SellerProfile.verification_status,
+                TrustScore.overall_score,
+            )
+            .join(SellerProfile, Product.seller_id == SellerProfile.id)
+            .outerjoin(TrustScore, TrustScore.seller_id == SellerProfile.id)
+            .where(*filters)
+            .order_by(Product.created_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
-        profile = result.scalar_one_or_none()
-        if not profile:
-            raise NotFoundException("SellerProfile", str(user_id))
-        return profile.id
 
-    async def create_customer(self, user_id: int, data: CustomerCreate) -> dict:
-        seller_id = await self._get_seller_id_from_user(user_id)
-        customer = await self.customer_repo.create(
-            seller_id=seller_id,
-            data=data.model_dump(exclude_unset=True),
+        items = []
+        for row in result.all():
+            product, seller_name, seller_city, v_status, trust_score = row
+            items.append({
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "category": product.category,
+                "price": product.price,
+                "image_url": product.image_url,
+                "stock": product.stock,
+                "seller_id": product.seller_id,
+                "seller_name": seller_name,
+                "seller_city": seller_city,
+                "seller_verification_status": v_status.value if hasattr(v_status, "value") else v_status,
+                "trust_score": round(trust_score, 1) if trust_score is not None else None,
+            })
+
+        payload = {
+            "items": items,
+            "total": total,
+            "next_cursor": str(offset + len(items)) if offset + len(items) < total else None,
+            "limit": limit,
+        }
+
+        # Cache for 60s — discovery data changes rarely
+        await RedisClient.set_cache(cache_key, payload, ttl=60)
+        return payload
+
+    async def get_public_seller(self, seller_id: int) -> dict:
+        """Public seller profile with trust score and product count."""
+        result = await self.db.execute(
+            select(
+                SellerProfile,
+                TrustScore.overall_score,
+                func.count(Product.id),
+            )
+            .outerjoin(TrustScore, TrustScore.seller_id == SellerProfile.id)
+            .outerjoin(Product, Product.seller_id == SellerProfile.id)
+            .where(SellerProfile.id == seller_id)
+            .group_by(SellerProfile.id, TrustScore.id)
         )
-        return customer
+        row = result.first()
+        if not row:
+            raise NotFoundException("Seller", str(seller_id))
 
-    async def get_customer(self, customer_id: int) -> dict:
-        customer = await self.customer_repo.get_by_id(customer_id)
-        if not customer:
-            raise NotFoundException("Customer", str(customer_id))
-        return customer
-
-    async def get_customers_by_seller(self, user_id: int) -> list:
-        seller_id = await self._get_seller_id_from_user(user_id)
-        return await self.customer_repo.get_by_seller(seller_id)
-
-    async def update_customer(self, customer_id: int, data: CustomerUpdate) -> dict:
-        customer = await self.customer_repo.get_by_id(customer_id)
-        if not customer:
-            raise NotFoundException("Customer", str(customer_id))
-
-        update_data = data.model_dump(exclude_unset=True)
-        updated = await self.customer_repo.update(customer_id, update_data)
-        return updated
-
-    async def delete_customer(self, customer_id: int) -> bool:
-        customer = await self.customer_repo.get_by_id(customer_id)
-        if not customer:
-            raise NotFoundException("Customer", str(customer_id))
-        return await self.customer_repo.delete(customer_id)
+        profile, trust_score, product_count = row
+        return {
+            "id": profile.id,
+            "business_name": profile.business_name,
+            "business_type": profile.business_type,
+            "description": profile.description,
+            "city": profile.city,
+            "country": profile.country,
+            "verification_status": profile.verification_status.value if hasattr(profile.verification_status, "value") else profile.verification_status,
+            "trust_score": round(trust_score, 1) if trust_score is not None else None,
+            "product_count": product_count,
+            "created_at": profile.created_at,
+        }

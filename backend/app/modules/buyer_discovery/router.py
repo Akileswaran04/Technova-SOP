@@ -1,61 +1,63 @@
-"""Buyer Discovery Router — HTTP endpoints only."""
-from typing import List
+"""Buyer Discovery Router — buyer-facing search endpoints."""
+from typing import Optional
 
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query
 
-from app.core.dependencies import get_current_user_id
-from app.modules.buyer_discovery.dependencies import get_customer_service
-from app.modules.buyer_discovery.schemas import (
-    CustomerCreate, CustomerUpdate, CustomerResponse,
+from app.modules.buyer_discovery.dependencies import get_discovery_service
+from app.modules.buyer_discovery.discovery_schemas import (
+    DiscoveryResponse, SellerPublicResponse,
 )
-from app.modules.buyer_discovery.service import CustomerService
+from app.modules.buyer_discovery.discovery_service import DiscoveryService
+from app.modules.product_listing.service import ProductService
+from app.modules.product_listing.dependencies import get_product_service
 
 router = APIRouter()
 
 
-@router.get("", response_model=List[CustomerResponse])
-async def list_customers(
-    user_id: str = Depends(get_current_user_id),
-    service: CustomerService = Depends(get_customer_service),
+@router.get("/discover", response_model=DiscoveryResponse)
+async def discover(
+    category: Optional[str] = Query(None, max_length=100),
+    location: Optional[str] = Query(None, max_length=100),
+    budget: Optional[float] = Query(None, gt=0),
+    q: Optional[str] = Query(None, max_length=255),
+    limit: int = Query(50, ge=1, le=100),
+    cursor: Optional[str] = Query(None, description="Opaque offset cursor"),
+    service: DiscoveryService = Depends(get_discovery_service),
 ):
-    """List all customers for the current seller."""
-    return await service.get_customers_by_seller(int(user_id))
+    """Search/filter sellers & products by category, location, budget."""
+    offset = int(cursor) if cursor and cursor.isdigit() else 0
+    return await service.search_products(
+        category=category,
+        location=location,
+        budget=budget,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
 
 
-@router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
-async def create_customer(
-    data: CustomerCreate,
-    user_id: str = Depends(get_current_user_id),
-    service: CustomerService = Depends(get_customer_service),
+@router.get("/sellers/{seller_id}", response_model=SellerPublicResponse)
+async def get_seller(
+    seller_id: int,
+    service: DiscoveryService = Depends(get_discovery_service),
 ):
-    """Create a new customer record."""
-    return await service.create_customer(int(user_id), data)
+    """Public seller profile with trust-score badge."""
+    return await service.get_public_seller(seller_id)
 
 
-@router.get("/{customer_id}", response_model=CustomerResponse)
-async def get_customer(
-    customer_id: int,
-    service: CustomerService = Depends(get_customer_service),
+@router.get("/sellers/{seller_id}/products")
+async def get_seller_products(
+    seller_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+    service: ProductService = Depends(get_product_service),
 ):
-    """Get a customer by ID."""
-    return await service.get_customer(customer_id)
-
-
-@router.put("/{customer_id}", response_model=CustomerResponse)
-async def update_customer(
-    customer_id: int,
-    data: CustomerUpdate,
-    service: CustomerService = Depends(get_customer_service),
-):
-    """Update a customer record."""
-    return await service.update_customer(customer_id, data)
-
-
-@router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_customer(
-    customer_id: int,
-    service: CustomerService = Depends(get_customer_service),
-):
-    """Delete a customer record."""
-    await service.delete_customer(customer_id)
+    """Public product list for a seller."""
+    offset = int(cursor) if cursor and cursor.isdigit() else 0
+    products = await service.get_public_seller_products(seller_id, limit=limit, offset=offset)
+    return {
+        "items": products,
+        "next_cursor": str(offset + len(products)) if len(products) == limit else None,
+        "limit": limit,
+    }
