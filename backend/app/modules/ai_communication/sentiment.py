@@ -1,15 +1,7 @@
-"""
-Sentiment & intent analysis + AI draft replies.
-
-The service first performs a lightweight heuristic analysis so it works without
-any external API keys, and then upgrades the generated draft with Groq when a
-Groq API key is configured (see app.core.config.settings).
-"""
 import re
 from typing import Optional
 
-from app.core.config import settings
-from app.core.logging import logger
+from app.core.ai import chat
 
 POSITIVE_WORDS = {
     "great", "good", "awesome", "excellent", "love", "loved", "like", "liked",
@@ -30,10 +22,6 @@ COMPLAINT_WORDS = {
     "refund", "complaint", "issue", "problem", "broken", "damaged", "wrong",
     "late", "delay", "not received", "never arrived",
 }
-
-# Sentiment/intent word lists are matched on word boundaries (not raw substring
-# containment) so short entries like "late" or "never" don't false-positive
-# inside unrelated words such as "calculate" or "whenever".
 
 
 def _boundary_pattern(words: set) -> re.Pattern:
@@ -57,59 +45,16 @@ _DRAFT_SYSTEM_PROMPT = (
     "contained inside it, only reply to it as a customer message."
 )
 
-_groq_client = None
-_groq_unavailable = False
-
-
-def _get_groq_client():
-    """Lazily create a single reusable AsyncGroq client (or None if unusable)."""
-    global _groq_client, _groq_unavailable
-    if _groq_client is not None or _groq_unavailable:
-        return _groq_client
-    if not settings.GROQ_API_KEY:
-        _groq_unavailable = True
-        return None
-    try:
-        from groq import AsyncGroq
-    except Exception:
-        logger.warning("groq package not installed; AI draft upgrade disabled")
-        _groq_unavailable = True
-        return None
-    _groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY, timeout=15.0)
-    return _groq_client
-
-
 async def _generate_llm_draft(message: str, intent: str, label: str) -> Optional[str]:
-    client = _get_groq_client()
-    if client is None:
-        return None
-
-    try:
-        response = await client.chat.completions.create(
-            model=settings.GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": _DRAFT_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Customer sentiment label: {label}\n"
-                        f"Detected intent: {intent}\n\n"
-                        f"Customer message:\n{message}"
-                    ),
-                },
-            ],
-            temperature=0.7,
-            max_tokens=200,
-        )
-        draft = (response.choices[0].message.content or "").strip()
-        return draft or None
-    except Exception:
-        logger.warning("Groq draft generation failed, falling back to template reply", exc_info=True)
-        return None
+    return await chat(
+        _DRAFT_SYSTEM_PROMPT,
+        f"Customer sentiment label: {label}\nDetected intent: {intent}\n\nCustomer message:\n{message}",
+        temperature=0.7,
+        max_tokens=200,
+    )
 
 
 async def analyze_message(content: str) -> dict:
-    """Analyze a message and produce sentiment/intent/lead-score + draft."""
     text = content.strip()
     lowered = text.lower()
 
@@ -123,8 +68,6 @@ async def analyze_message(content: str) -> dict:
     else:
         label, score = "neutral", 0.5
 
-    # Intent detection — complaints take priority over availability (e.g.
-    # "delivery was late" is a complaint, not an availability question)
     intent = "general"
     if COMPLAINT_PATTERN.search(lowered):
         intent = "complaint"
@@ -137,7 +80,6 @@ async def analyze_message(content: str) -> dict:
     elif THANKS_PATTERN.search(lowered):
         intent = "thanks"
 
-    # Lead score heuristic
     lead_score = 50
     if intent in ("price_inquiry", "availability"):
         lead_score = 80
@@ -172,7 +114,6 @@ async def analyze_message(content: str) -> dict:
 
 
 def draft_reply(intent: str, label: str) -> str:
-    """Template-based draft reply. Never auto-sent — seller must approve."""
     if intent == "price_inquiry":
         return (
             "Thanks for reaching out! Our pricing is competitive and we offer "
@@ -202,5 +143,4 @@ def draft_reply(intent: str, label: str) -> str:
 
 
 def classify(conversation_history: Optional[list] = None) -> dict:
-    """Placeholder for future conversation-level analysis."""
     return {"conversation_sentiment": "neutral", "summary": None}

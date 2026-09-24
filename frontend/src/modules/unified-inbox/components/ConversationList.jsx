@@ -1,8 +1,4 @@
-/**
- * ConversationList — left panel of the inbox.
- * Shows list of conversations with avatar, name, last message, time, unread badge.
- * Data loaded from backend API.
- */
+
 import { useState, useEffect } from 'react';
 import { getConversations } from '../../../services/storage';
 
@@ -43,14 +39,12 @@ export default function ConversationList({ sellerId, selectedId, onSelect }) {
     return () => { cancelled = true; };
   }, [sellerId]);
 
-  // Sort by last message time (newest first)
   const sorted = [...conversations].sort((a, b) => {
     const ta = new Date(a.lastMessageTime || 0);
     const tb = new Date(b.lastMessageTime || 0);
     return tb - ta;
   });
 
-  // Filter by search
   const filtered = sorted.filter((c) => {
     const q = search.toLowerCase().trim();
     return !q || c.customerName.toLowerCase().includes(q) || (c.lastMessage || '').toLowerCase().includes(q);
@@ -71,7 +65,6 @@ export default function ConversationList({ sellerId, selectedId, onSelect }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="px-4 py-3 border-b border-outline-variant bg-surface-container-lowest">
         <h2 className="text-headline-md text-on-surface" style={{ fontWeight: 600 }}>Inbox</h2>
         <div className="relative mt-2">
@@ -86,7 +79,6 @@ export default function ConversationList({ sellerId, selectedId, onSelect }) {
         </div>
       </div>
 
-      {/* Conversation list */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
@@ -109,12 +101,10 @@ export default function ConversationList({ sellerId, selectedId, onSelect }) {
                   : 'hover:bg-surface-container-low'
               }`}
             >
-              {/* Avatar */}
               <div className="w-12 h-12 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-label-md font-bold flex-shrink-0">
                 {convo.customerName?.charAt(0)?.toUpperCase() || '?'}
               </div>
 
-              {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-label-md truncate ${hasUnread ? 'text-on-surface font-bold' : 'text-on-surface'}`}>

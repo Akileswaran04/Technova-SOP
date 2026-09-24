@@ -1,16 +1,3 @@
-"""
-Redis realtime layer — presence, typing, unread counters, pub/sub.
-
-Redis is never the source of truth for messages or money; it holds
-temporary/high-speed state only.
-
-Key layout (spec §4):
-    user:{id}:online                 → "1" with TTL
-    conversation:{id}:typing         → set of typing userIds
-    user:{id}:unread                 → hash conversationId → count
-    ws:session:{connectionId}        → userId
-    chat:channel:{conversationId}    → pub/sub channel
-"""
 import json
 import logging
 from typing import Any, Optional
@@ -19,15 +6,11 @@ from app.infrastructure.redis import RedisClient
 
 logger = logging.getLogger(__name__)
 
-ONLINE_TTL = 60  # seconds — refreshed by heartbeats
-TYPING_TTL = 8  # seconds — cleared automatically
+ONLINE_TTL = 60
+TYPING_TTL = 8
 
 
 class RealtimeService:
-    """High-level helpers over the shared Redis client."""
-
-    # ── Presence ──
-
     @staticmethod
     async def set_online(user_id: int, connection_id: str = "") -> None:
         client = await RedisClient.get_client()
@@ -60,7 +43,6 @@ class RealtimeService:
             return
         await client.expire(f"user:{user_id}:online", ONLINE_TTL)
 
-    # ── Typing ──
 
     @staticmethod
     async def set_typing(conversation_id: str, user_id: int, is_typing: bool) -> None:
@@ -82,7 +64,6 @@ class RealtimeService:
         members = await client.smembers(f"conversation:{conversation_id}:typing")
         return [int(m) for m in members if m.isdigit()]
 
-    # ── Unread ──
 
     @staticmethod
     async def get_unread(user_id: int) -> dict:
@@ -96,7 +77,6 @@ class RealtimeService:
     async def get_unread_total(user_id: int) -> int:
         return sum((await RealtimeService.get_unread(user_id)).values())
 
-    # ── Pub/Sub ──
 
     @staticmethod
     def channel(conversation_id: str) -> str:
@@ -115,7 +95,6 @@ class RealtimeService:
         except Exception as e:
             logger.warning("Redis publish failed: %s", e)
 
-    # ── WebSocket session map ──
 
     @staticmethod
     async def user_for_connection(connection_id: str) -> Optional[str]:

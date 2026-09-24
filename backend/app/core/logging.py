@@ -1,13 +1,9 @@
-"""
-Structured logging configuration for TECHNOVA.
-"""
 
 import logging
 import sys
 
 
 def setup_logging() -> None:
-    """Configure structured logging for the application."""
     log_format = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 
     logging.basicConfig(
@@ -18,7 +14,6 @@ def setup_logging() -> None:
         ],
     )
 
-    # Reduce noise from third-party libraries
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 

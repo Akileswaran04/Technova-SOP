@@ -1,4 +1,3 @@
-"""AI Communication Repository — database operations only."""
 from typing import Optional
 
 
@@ -9,8 +8,6 @@ from app.modules.seller_profile.models import AIInteraction
 
 
 class AIInteractionRepository:
-    """Repository for ai_interactions table."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -37,7 +34,6 @@ class AIInteractionRepository:
         return list(result.scalars().all())
 
     async def get_stats(self, seller_id: int) -> dict:
-        """Get aggregated AI stats for a seller."""
         base = select(
             func.count(AIInteraction.id).label("total"),
             func.coalesce(func.sum(func.cast(AIInteraction.was_sent, type_=func.count().type)), 0).label("sent"),
@@ -48,7 +44,6 @@ class AIInteractionRepository:
         result = await self.db.execute(base)
         row = result.one()
 
-        # Emotion distribution
         emotion_result = await self.db.execute(
             select(AIInteraction.emotion, func.count(AIInteraction.id))
             .where(AIInteraction.seller_id == seller_id, AIInteraction.emotion.isnot(None))
@@ -56,7 +51,6 @@ class AIInteractionRepository:
         )
         emotions = {row[0]: row[1] for row in emotion_result.all()}
 
-        # Strategy distribution
         strategy_result = await self.db.execute(
             select(AIInteraction.strategy, func.count(AIInteraction.id))
             .where(AIInteraction.seller_id == seller_id, AIInteraction.strategy.isnot(None))

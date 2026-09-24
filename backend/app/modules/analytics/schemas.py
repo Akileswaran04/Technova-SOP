@@ -1,4 +1,3 @@
-"""Pydantic schemas for analytics module."""
 from datetime import datetime
 from typing import Optional, List
 
@@ -7,19 +6,17 @@ from pydantic import BaseModel
 
 
 class AnalyticsResponse(BaseModel):
-    """Aggregated analytics summary for a seller."""
     seller_id: int
     total_orders: int = 0
     total_revenue: float = 0.0
     average_order_value: float = 0.0
     conversion_rate: float = 0.0
-    response_time_avg: Optional[float] = None  # seconds
+    response_time_avg: Optional[float] = None
     period: Optional[datetime] = None
     computed_at: Optional[datetime] = None
 
 
 class TrustScoreResponse(BaseModel):
-    """Seller trust score."""
     seller_id: int
     overall_score: float
     review_score: float

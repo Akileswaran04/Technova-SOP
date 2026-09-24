@@ -1,6 +1,3 @@
-"""
-Alembic environment configuration for async PostgreSQL.
-"""
 
 import asyncio
 from logging.config import fileConfig
@@ -11,7 +8,6 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Import all models so Alembic can detect them
 from app.infrastructure.postgres.base import Base
 from app.modules.seller_profile.models import (  # noqa: F401
     User, SellerProfile, SellerVerification,
@@ -32,18 +28,14 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Override sqlalchemy.url from environment
 import os
 from dotenv import load_dotenv
-# .env is authoritative — override stale process-env vars (e.g. a broken
-# DATABASE_URL left over from a previous session)
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), override=True)
 database_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
 config.set_main_option("sqlalchemy.url", database_url)
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -64,7 +56,6 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """Run migrations in 'online' mode with async engine."""
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -78,7 +69,6 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
     asyncio.run(run_async_migrations())
 
 

@@ -1,9 +1,3 @@
-"""Buyer Discovery Service — search sellers & products for buyers.
-
-Same Input → Filter → Match → List flow as the seller-facing module,
-exposed here as a buyer-facing search. Results are cached in Redis
-(short TTL) since they are read-heavy and rarely stale.
-"""
 import hashlib
 import json
 from typing import Optional
@@ -18,8 +12,6 @@ from app.core.exceptions import NotFoundException
 
 
 class DiscoveryService:
-    """Business logic for buyer-facing discovery."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -38,7 +30,6 @@ class DiscoveryService:
         limit: int = 50,
         offset: int = 0,
     ) -> dict:
-        """Search products with seller + trust score info (Redis-cached)."""
         cache_key = self._cache_key(category, location, budget, q, limit, offset)
         cached = await RedisClient.get_cache(cache_key)
         if cached is not None:
@@ -57,7 +48,6 @@ class DiscoveryService:
         if location:
             filters.append(SellerProfile.city.ilike(f"%{location}%"))
 
-        # Count total (unpaginated)
         count_result = await self.db.execute(
             select(func.count(Product.id)).select_from(Product).join(
                 SellerProfile, Product.seller_id == SellerProfile.id
@@ -106,12 +96,10 @@ class DiscoveryService:
             "limit": limit,
         }
 
-        # Cache for 60s — discovery data changes rarely
         await RedisClient.set_cache(cache_key, payload, ttl=60)
         return payload
 
     async def get_public_seller(self, seller_id: int) -> dict:
-        """Public seller profile with trust score and product count."""
         result = await self.db.execute(
             select(
                 SellerProfile,

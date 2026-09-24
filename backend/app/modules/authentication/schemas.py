@@ -1,4 +1,3 @@
-"""Pydantic schemas for authentication."""
 from typing import Optional, Literal
 
 
@@ -6,19 +5,16 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
-    """Register a new account — role chosen once at registration."""
     email: EmailStr
     password: str = Field(..., min_length=6)
     role: Literal["seller", "buyer"] = Field(..., description="Role picker shown at registration")
     full_name: Optional[str] = None
     phone: Optional[str] = None
 
-    # Seller-only fields
     business_name: Optional[str] = None
     business_type: Optional[str] = None
     license_number: Optional[str] = None
 
-    # Buyer-only fields
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     city: Optional[str] = None
@@ -26,20 +22,21 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Login with email/phone and password."""
     identifier: str = Field(..., description="Email or phone number")
     password: str
 
 
 class DemoLoginRequest(BaseModel):
-    """One-click demo login — picks a seeded demo account by key."""
-    demo: Literal["seller1", "seller2", "buyer1", "buyer2", "admin"] = Field(
-        ..., description="Demo account key (seller1, seller2, buyer1, buyer2, admin)"
+    demo: Literal["seller1", "seller2", "seller3", "buyer1", "buyer2", "buyer3", "admin"] = Field(
+        ..., description="Demo account key (seller1-3, buyer1-3, admin)"
     )
 
 
+class LanguageUpdate(BaseModel):
+    preferred_language: str = Field(..., min_length=2, max_length=10)
+
+
 class TokenResponse(BaseModel):
-    """JWT token response."""
     access_token: str
     token_type: str = "bearer"
     role: str
@@ -50,7 +47,6 @@ class TokenResponse(BaseModel):
 
 
 class SellerProfileResponse(BaseModel):
-    """Seller profile data returned after login."""
     id: str
     store_name: Optional[str]
     category: Optional[str]

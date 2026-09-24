@@ -1,4 +1,3 @@
-"""Analytics module dependencies."""
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,5 +8,4 @@ from app.modules.analytics.service import AnalyticsService
 async def get_analytics_service(
     db: AsyncSession = Depends(get_db),
 ) -> AnalyticsService:
-    """Provide AnalyticsService with database session."""
     return AnalyticsService(db)

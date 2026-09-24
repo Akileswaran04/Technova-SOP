@@ -1,8 +1,4 @@
-/**
- * AICommsTab — AI Communication Dashboard for sellers.
- * Integrates AutoReplyToggle, AIDraft, and aiEngine service.
- * Provides live message simulation, AI config, and performance stats.
- */
+
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { analyzeMessage, normalizeNeuroChatConversation } from '../services/aiEngine';
 import { getConversations, listConversationDrafts, generateDraft, sendDraft, editDraft } from '../../../services/storage';
@@ -11,8 +7,6 @@ import AIDraft from './AIDraft';
 
 const toneOptions = ['Professional', 'Friendly', 'Casual', 'Formal'];
 const lengthOptions = ['Short', 'Medium', 'Detailed'];
-
-/* ── Stats Card ────────────────────────────────────────── */
 
 function StatCard({ icon, label, value, color }) {
   return (
@@ -27,8 +21,6 @@ function StatCard({ icon, label, value, color }) {
     </div>
   );
 }
-
-/* ── Live Message Item ─────────────────────────────────── */
 
 function LiveMessage({ buyer, onGenerateDraft }) {
   return (
@@ -51,8 +43,6 @@ function LiveMessage({ buyer, onGenerateDraft }) {
   );
 }
 
-/* ── Main Component ────────────────────────────────────── */
-
 export default function AICommsTab({ sellerId, onToast }) {
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(true);
   const [autoMode, setAutoMode] = useState('approval');
@@ -63,13 +53,11 @@ export default function AICommsTab({ sellerId, onToast }) {
     sentCount: 0,
   });
 
-  // AI settings
   const [tone, setTone] = useState('Professional');
   const [length, setLength] = useState('Medium');
   const [showSettings, setShowSettings] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Pending messages pulled from the real seller inbox / MongoDB conversations.
   const [pendingMessages, setPendingMessages] = useState([]);
 
   useEffect(() => {
@@ -99,8 +87,6 @@ export default function AICommsTab({ sellerId, onToast }) {
           return draftList.map((draft) => ({ draft, conversation }));
         });
 
-        // Only pending drafts show in the review queue — sent/rejected ones
-        // still count toward the stats below.
         const allDrafts = allRawDrafts
           .filter(({ draft }) => (draft.status || 'pending') === 'pending')
           .map(({ draft, conversation }) => ({
@@ -224,8 +210,6 @@ export default function AICommsTab({ sellerId, onToast }) {
     setDrafts((prev) => prev.filter((item) => item.id !== draftId));
   }, []);
 
-  // Auto-generate drafts when auto-reply is enabled; if there are real drafts already,
-  // the backend is the source of truth and the mock is left out.
   useEffect(() => {
     if (!autoReplyEnabled || autoMode !== 'auto' || pendingMessages.length === 0) return;
 
@@ -249,7 +233,6 @@ export default function AICommsTab({ sellerId, onToast }) {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-on-surface font-bold flex items-center gap-2">
@@ -268,7 +251,6 @@ export default function AICommsTab({ sellerId, onToast }) {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon="chat" label="Messages analyzed" value={stats.messagesProcessed.toLocaleString()} color="bg-blue-50 text-blue-600" />
         <StatCard icon="send" label="Responses sent" value={stats.sentCount.toLocaleString()} color="bg-emerald-50 text-emerald-600" />
@@ -276,7 +258,6 @@ export default function AICommsTab({ sellerId, onToast }) {
         <StatCard icon="trending_up" label="Avg lead score" value={avgLeadScore == null ? '—' : `${avgLeadScore}/100`} color="bg-amber-50 text-amber-600" />
       </div>
 
-      {/* Auto-Reply Toggle + Settings */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
         <AutoReplyToggle
           enabled={autoReplyEnabled}
@@ -285,7 +266,6 @@ export default function AICommsTab({ sellerId, onToast }) {
           onModeChange={setAutoMode}
         />
 
-        {/* Settings toggle */}
         <div className="px-4 py-2.5 border-b border-outline-variant flex items-center justify-between">
           <span className="text-label-md text-on-surface font-medium">AI Configuration</span>
           <button
@@ -300,7 +280,6 @@ export default function AICommsTab({ sellerId, onToast }) {
 
         {showSettings && (
           <div className="px-4 py-4 space-y-4 bg-surface-container-low">
-            {/* Tone */}
             <div>
               <label className="text-label-md text-on-surface font-medium block mb-2">Response Tone</label>
               <div className="flex flex-wrap gap-2">
@@ -320,7 +299,6 @@ export default function AICommsTab({ sellerId, onToast }) {
               </div>
             </div>
 
-            {/* Length */}
             <div>
               <label className="text-label-md text-on-surface font-medium block mb-2">Response Length</label>
               <div className="flex gap-2">
@@ -340,7 +318,6 @@ export default function AICommsTab({ sellerId, onToast }) {
               </div>
             </div>
 
-            {/* Product context */}
             <div className="flex items-center justify-between p-3 bg-surface rounded-xl border border-outline-variant">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px] text-primary">inventory_2</span>
@@ -356,7 +333,6 @@ export default function AICommsTab({ sellerId, onToast }) {
         )}
       </div>
 
-      {/* AI Drafts */}
       {drafts.length > 0 && (
         <div>
           <h2 className="text-title-sm text-on-surface font-semibold mb-2 px-1">AI Drafts ({drafts.length})</h2>
@@ -375,7 +351,6 @@ export default function AICommsTab({ sellerId, onToast }) {
         </div>
       )}
 
-      {/* Pending Messages */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-outline-variant flex items-center justify-between">
           <div>

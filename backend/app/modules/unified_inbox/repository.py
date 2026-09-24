@@ -1,9 +1,3 @@
-"""Unified Inbox Repository — MongoDB operations only.
-
-Conversations and messages live in MongoDB; PostgreSQL keeps identity and
-financial data. Messages are their own collection (never embedded arrays),
-paginated by _id cursor, ordered by sequenceNumber.
-"""
 from typing import Optional
 
 from bson import ObjectId
@@ -21,7 +15,6 @@ def to_str_id(doc) -> Optional[str]:
 
 
 def serialize(doc) -> dict:
-    """Convert a Mongo doc to an API-shaped dict."""
     if not doc:
         return None
     out = {}
@@ -38,13 +31,7 @@ def serialize(doc) -> dict:
 
 
 class ConversationRepository:
-    """Mongo repository for conversations."""
-
     async def get_or_create(self, seller_id: int, buyer_id: int) -> dict:
-        """Check-then-create: never duplicate a (sellerId, buyerId) pair.
-
-        Uses an upsert with a unique index as the race-safe fallback.
-        """
         convos = await get_conversations_collection()
         now = utcnow()
 
@@ -68,7 +55,6 @@ class ConversationRepository:
             result = await convos.insert_one(doc)
             return await convos.find_one({"_id": result.inserted_id})
         except Exception:
-            # Unique index race — fetch the winner
             return await convos.find_one({"sellerId": seller_id, "buyerId": buyer_id})
 
     async def get_by_id(self, conversation_id: str) -> Optional[dict]:
@@ -80,7 +66,6 @@ class ConversationRepository:
     async def list_for_participant(
         self, user_id: int, user_role: str, cursor: Optional[str] = None, limit: int = 50
     ) -> tuple[list, Optional[str]]:
-        """List conversations for a seller or buyer, cursor-paginated."""
         convos = await get_conversations_collection()
         field = "sellerId" if user_role == "seller" else "buyerId"
 
@@ -126,7 +111,6 @@ class ConversationRepository:
         )
 
     async def mark_read(self, conversation_id: str, reader_id: int) -> None:
-        """Reset unread for the reader and stamp readAt on their messages."""
         convos = await get_conversations_collection()
         messages = await get_messages_collection()
 
@@ -145,14 +129,11 @@ class ConversationRepository:
 
 
 class MessageRepository:
-    """Mongo repository for messages."""
-
     async def find_by_client_message_id(self, client_message_id: str) -> Optional[dict]:
         messages = await get_messages_collection()
         return await messages.find_one({"clientMessageId": client_message_id})
 
     async def next_sequence(self, conversation_id: str) -> int:
-        """Deterministic ordering: last sequence + 1 (conversation-scoped)."""
         messages = await get_messages_collection()
         last = await (
             messages.find({"conversationId": ObjectId(conversation_id)})
@@ -174,12 +155,10 @@ class MessageRepository:
         limit: int = 50,
         after_sequence: Optional[int] = None,
     ) -> tuple[list, Optional[str]]:
-        """Cursor-paginated messages, newest-last within the page."""
         messages = await get_messages_collection()
         query = {"conversationId": ObjectId(conversation_id)}
 
         if after_sequence is not None:
-            # Reconnection sync — return only the gap, not full history
             query["sequenceNumber"] = {"$gt": after_sequence}
             docs = await (
                 messages.find(query)
@@ -202,7 +181,7 @@ class MessageRepository:
         )
         has_more = len(docs) > limit
         docs = docs[:limit]
-        docs.reverse()  # oldest first within the page, for chat UX
+        docs.reverse()
         next_cursor = str(docs[0]["_id"]) if has_more and docs else None
         return docs, next_cursor
 
@@ -218,4 +197,11 @@ class MessageRepository:
         await messages.update_one(
             {"_id": ObjectId(message_id) if isinstance(message_id, str) else message_id},
             {"$set": {"sentiment": sentiment}},
+        )
+
+    async def update_translation(self, message_id, translated_content: str, translated_language: str) -> None:
+        messages = await get_messages_collection()
+        await messages.update_one(
+            {"_id": ObjectId(message_id) if isinstance(message_id, str) else message_id},
+            {"$set": {"translatedContent": translated_content, "translatedLanguage": translated_language}},
         )

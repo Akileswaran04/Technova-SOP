@@ -1,6 +1,3 @@
-"""
-Admin models — audit_logs table (migration 001).
-"""
 from datetime import datetime
 
 from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Index
@@ -10,7 +7,6 @@ from app.infrastructure.postgres.base import Base
 
 
 class AuditLog(Base):
-    """Immutable audit trail for admin/moderation actions."""
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -31,5 +27,4 @@ class AuditLog(Base):
         Index("ix_audit_logs_created_at", "created_at"),
     )
 
-    # Relationships
     user = relationship("User", foreign_keys=[user_id])

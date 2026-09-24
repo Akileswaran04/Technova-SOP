@@ -1,4 +1,3 @@
-"""Buyer Discovery Repository — database operations only."""
 from typing import Optional
 
 
@@ -9,8 +8,6 @@ from app.modules.seller_profile.models import Customer
 
 
 class CustomerRepository:
-    """Repository for customers table."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 

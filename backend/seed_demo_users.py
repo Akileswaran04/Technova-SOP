@@ -1,22 +1,8 @@
-"""
-Seed demo accounts for the TECHNOVA demo build.
-
-Provisions (idempotent — safe to run repeatedly):
-  Seller 1  seller1@technova.local / demo1234   Rajesh Handicrafts   (verified)
-  Seller 2  seller2@technova.local / demo1234   Meena Organics       (verified)
-  Buyer 1   buyer1@technova.local  / demo1234   Arjun Mehta
-  Buyer 2   buyer2@technova.local  / demo1234   Sana Khan
-  Admin     admin@technova.local   / demo1234   (for verification review)
-
-Each seller gets products in PostgreSQL and a starter conversation with a
-buyer in MongoDB (messages with sentiment + sequence numbers).
-
-Run: cd backend && .venv/Scripts/python.exe seed_demo_users.py
-"""
 import asyncio
+import sys
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.security import hash_password
 from app.infrastructure.postgres.database import AsyncSessionLocal
@@ -29,73 +15,99 @@ from app.modules.ai_communication.sentiment import analyze_message
 
 DEMO_PASSWORD = "demo1234"
 
-# ── Demo account definitions ────────────────────────────────────────────────
 
 DEMO_ACCOUNTS = [
     {
         "key": "seller1",
         "email": "seller1@technova.local",
         "role": "seller",
-        "full_name": "Rajesh Kumar",
+        "full_name": "Murugan Selvam",
         "seller": {
-            "business_name": "Rajesh Handicrafts",
-            "business_type": "handicrafts",
-            "description": "Handcrafted brass, wood and leather goods made by artisans in Jaipur.",
-            "city": "Jaipur",
-            "state": "Rajasthan",
-            "license_number": "LIC-DEMO-001",
+            "business_name": "Murugan Silks",
+            "business_type": "textiles",
+            "description": "Kanchipuram silk sarees and veshtis woven by families of weavers in Kanchipuram.",
+            "city": "Kanchipuram",
+            "state": "Tamil Nadu",
+            "license_number": "LIC-TN-001",
         },
         "products": [
-            {"name": "Brass Diya Set (Pack of 4)", "description": "Traditional handcrafted brass diyas for puja and festivals.", "category": "Home Decor", "price": 599.0, "stock": 34, "likes": 156},
-            {"name": "Handmade Leather Wallet", "description": "Premium hand-stitched leather wallet with RFID protection.", "category": "Accessories", "price": 899.0, "stock": 25, "likes": 42},
-            {"name": "Block Print Cotton Dupatta", "description": "Elegant hand-block printed cotton dupatta in indigo.", "category": "Clothing", "price": 749.0, "stock": 18, "likes": 63},
+            {"name": "Kanchipuram Pure Silk Saree", "description": "Handwoven pure zari silk saree with temple border.", "category": "Clothing", "price": 8999.0, "stock": 12, "likes": 210},
+            {"name": "Silk Veshti with Angavastram", "description": "Traditional silk veshti set for weddings and festivals.", "category": "Clothing", "price": 2499.0, "stock": 30, "likes": 96},
+            {"name": "Cotton Saree - Madurai Sungudi", "description": "Light cotton saree with the classic Sungudi dot print.", "category": "Clothing", "price": 1299.0, "stock": 45, "likes": 78},
         ],
         "conversation_with": "buyer1",
         "thread": [
-            ("buyer", "Hi! Do you have the brass diya set in stock? I need 2 sets for Diwali."),
-            ("seller", "Hello! Yes, we have them in stock. Each set comes with 4 diyas, all handcrafted."),
-            ("buyer", "Great — can you do a small discount for 2 sets?"),
-            ("seller", "I can offer 10% off on bulk orders of 2+ sets. Shall I prepare an order?"),
-            ("buyer", "Yes please! That works."),
+            ("buyer", "Vanakkam! Kanchipuram saree maroon color la iruka?"),
+            ("seller", "Vanakkam! Aama, maroon and mayil kazhuthu blue rendum stock iruku."),
+            ("buyer", "Kalyanathukku vaanganum. Konjam price kuraikka mudiyuma?"),
+            ("seller", "2 sarees vaanginaa 8% discount tharen. Order podalama?"),
+            ("buyer", "Sari, 2 sarees order pannidren. Nandri!"),
         ],
     },
     {
         "key": "seller2",
         "email": "seller2@technova.local",
         "role": "seller",
-        "full_name": "Meena Iyer",
+        "full_name": "Lakshmi Narayanan",
         "seller": {
-            "business_name": "Meena Organics",
-            "business_type": "organic_food",
-            "description": "Single-origin organic spices, turmeric and coffee from small Kerala farms.",
-            "city": "Kochi",
-            "state": "Kerala",
-            "license_number": "LIC-DEMO-002",
+            "business_name": "Lakshmi Filter Coffee",
+            "business_type": "food",
+            "description": "Freshly roasted filter coffee, spices and pickles from Kumbakonam.",
+            "city": "Kumbakonam",
+            "state": "Tamil Nadu",
+            "license_number": "LIC-TN-002",
         },
         "products": [
-            {"name": "Organic Turmeric Powder (500g)", "description": "Pure organic turmeric sourced from Kerala farms.", "category": "Food & Spices", "price": 249.0, "stock": 120, "likes": 87},
-            {"name": "Single Origin Filter Coffee (250g)", "description": "Rich, earthy filter coffee from Chikmagalur estates.", "category": "Food & Spices", "price": 399.0, "stock": 60, "likes": 134},
-            {"name": "Cold Pressed Coconut Oil (1L)", "description": "First-press virgin coconut oil, no additives.", "category": "Groceries", "price": 450.0, "stock": 42, "likes": 71},
+            {"name": "Kumbakonam Degree Coffee Powder (500g)", "description": "Peaberry and arabica blend with 20 percent chicory.", "category": "Food & Spices", "price": 320.0, "stock": 150, "likes": 187},
+            {"name": "Homemade Mango Thokku (250g)", "description": "Spicy mango pickle made with gingelly oil.", "category": "Food & Spices", "price": 180.0, "stock": 80, "likes": 64},
+            {"name": "Cold Pressed Gingelly Oil (1L)", "description": "Chekku ennai from a traditional wooden press.", "category": "Groceries", "price": 520.0, "stock": 40, "likes": 91},
         ],
         "conversation_with": "buyer2",
         "thread": [
-            ("buyer", "Is the turmeric powder really single-origin? Where is it from?"),
-            ("seller", "Yes — it is grown by a single farmer cooperative near Wayanad, Kerala."),
-            ("buyer", "Wonderful. How long does delivery to Mumbai take?"),
-            ("seller", "2–3 business days via express courier, pan-India."),
-            ("buyer", "Perfect, I'll place an order for two packs."),
+            ("buyer", "Coffee powder fresh ah roast pannathu ah?"),
+            ("seller", "Aama, every week fresh roast pannitu dhaan anupuvom."),
+            ("buyer", "Chennai ku delivery ku evlo naal aagum?"),
+            ("seller", "2 to 3 naal la vandhurum, courier la anupuren."),
+            ("buyer", "Super, 2 packet order pannaren."),
+        ],
+    },
+    {
+        "key": "seller3",
+        "email": "seller3@technova.local",
+        "role": "seller",
+        "full_name": "Karthik Rajan",
+        "seller": {
+            "business_name": "Karthik Handicrafts",
+            "business_type": "handicrafts",
+            "description": "Thanjavur paintings, bronze idols and wooden toys made by local artisans.",
+            "city": "Thanjavur",
+            "state": "Tamil Nadu",
+            "license_number": "LIC-TN-003",
+        },
+        "products": [
+            {"name": "Thanjavur Painting - Lord Krishna", "description": "Gold foil Thanjavur painting, framed in teak.", "category": "Home Decor", "price": 5499.0, "stock": 6, "likes": 143},
+            {"name": "Bronze Nataraja Idol (8 inch)", "description": "Lost-wax cast bronze Nataraja from Swamimalai.", "category": "Home Decor", "price": 3999.0, "stock": 9, "likes": 118},
+            {"name": "Wooden Lacquer Toys Set", "description": "Colourful lacquered wooden toys for kids.", "category": "Toys", "price": 699.0, "stock": 3, "likes": 52},
+        ],
+        "conversation_with": "buyer3",
+        "thread": [
+            ("buyer", "Nataraja idol oda weight evlo irukum?"),
+            ("seller", "Around 2.5 kg irukum, romba nalla finishing."),
+            ("buyer", "Gift pack pannitu Madurai ku anupa mudiyuma?"),
+            ("seller", "Kandippa, gift box la pack pannitu anupuren."),
+            ("buyer", "Nandri anna, order podren."),
         ],
     },
 ]
 
 DEMO_BUYERS = [
-    {"key": "buyer1", "email": "buyer1@technova.local", "full_name": "Arjun Mehta", "first_name": "Arjun", "last_name": "Mehta", "city": "Mumbai"},
-    {"key": "buyer2", "email": "buyer2@technova.local", "full_name": "Sana Khan", "first_name": "Sana", "last_name": "Khan", "city": "Bengaluru"},
+    {"key": "buyer1", "email": "buyer1@technova.local", "full_name": "Priya Sundaram", "first_name": "Priya", "last_name": "Sundaram", "city": "Chennai"},
+    {"key": "buyer2", "email": "buyer2@technova.local", "full_name": "Arun Kumar", "first_name": "Arun", "last_name": "Kumar", "city": "Coimbatore"},
+    {"key": "buyer3", "email": "buyer3@technova.local", "full_name": "Divya Balasubramanian", "first_name": "Divya", "last_name": "Balasubramanian", "city": "Madurai"},
 ]
 
 DEMO_ADMIN = {"key": "admin", "email": "admin@technova.local", "full_name": "TechNova Admin"}
 
-# ── Helpers ─────────────────────────────────────────────────────────────────
 
 async def _get_or_create_user(db, email, role, full_name, extra=None):
     result = await db.execute(select(User).where(User.email == email))
@@ -135,7 +147,6 @@ async def _get_or_create_seller(db, user, seller_data):
     db.add(profile)
     await db.flush()
     await db.refresh(profile)
-    # Mark verification as approved so the trust flow has a paper trail
     db.add(SellerVerification(
         seller_id=profile.id,
         verification_type="business_license",
@@ -169,7 +180,7 @@ async def _get_or_create_buyer(db, user, buyer_data):
 async def _seed_products(db, seller_profile, products):
     result = await db.execute(select(Product).where(Product.seller_id == seller_profile.id))
     if result.scalars().first():
-        return  # already has products
+        return
     now = utcnow().replace(tzinfo=None)
     for p in products:
         db.add(Product(
@@ -187,7 +198,6 @@ async def _seed_products(db, seller_profile, products):
 
 
 async def _seed_conversation(convo_repo, msg_repo, seller_profile_id, buyer_profile_id, thread):
-    """Create (or reuse) the conversation and append the starter thread."""
     from app.infrastructure.mongodb.chat import get_messages_collection, get_conversations_collection
     from bson import ObjectId
 
@@ -195,12 +205,9 @@ async def _seed_conversation(convo_repo, msg_repo, seller_profile_id, buyer_prof
     msgs_coll = await get_messages_collection()
     convos_coll = await get_conversations_collection()
 
-    # Idempotent: reseed only if the thread is missing or was left incomplete
-    # (e.g. by an earlier interrupted run). Never touch extra user messages.
     existing = await msg_repo.get_page(convo["_id"], limit=200)
     if len(existing[0]) < len(thread):
         await msgs_coll.delete_many({"conversationId": convo["_id"]})
-        # Reset the conversation summary so the reseeded thread rebuilds it cleanly
         await convos_coll.update_one(
             {"_id": ObjectId(convo["_id"])},
             {"$set": {"unreadCount": 0, "unreadFor": None, "lastMessage": None, "lastMessageAt": None}},
@@ -218,20 +225,17 @@ async def _seed_conversation(convo_repo, msg_repo, seller_profile_id, buyer_prof
                 "content": content,
                 "messageType": "text",
                 "source": "in_app",
-                "sentiment": analyze_message(content),
+                "sentiment": await analyze_message(content),
                 "sequenceNumber": sequence,
                 "attachments": [],
                 "createdAt": msg_time,
                 "readAt": None,
                 "isAiGenerated": False,
             }
-            # sparse unique index: omit clientMessageId entirely when unset
             await msg_repo.create(doc)
             recipient = seller_profile_id if sender_type == "buyer" else buyer_profile_id
             await convo_repo.update_last_message(str(convo["_id"]), content, recipient)
 
-    # Recompute unread from actual unread messages — self-heals stale counters
-    # (e.g. from an interrupted earlier run) and stays correct on re-runs.
     unread = await msgs_coll.count_documents({
         "conversationId": convo["_id"],
         "senderId": buyer_profile_id,
@@ -244,13 +248,32 @@ async def _seed_conversation(convo_repo, msg_repo, seller_profile_id, buyer_prof
     return convo
 
 
-# ── Main ────────────────────────────────────────────────────────────────────
+async def reset_all():
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(text(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
+        ))
+        tables = [r[0] for r in rows]
+        if tables:
+            names = ", ".join('"' + t + '"' for t in tables)
+            await db.execute(text("TRUNCATE TABLE " + names + " RESTART IDENTITY CASCADE"))
+        await db.commit()
+    print("  cleared", len(tables), "postgres tables")
+
+    await MongoDBClient.connect_to_db()
+    from app.infrastructure.mongodb.chat import get_messages_collection, get_conversations_collection
+    await (await get_messages_collection()).delete_many({})
+    await (await get_conversations_collection()).delete_many({})
+    await MongoDBClient.close_connection()
+    print("  cleared mongo chat collections")
+
 
 async def seed():
+    if "--reset" in sys.argv:
+        await reset_all()
     buyers_by_key = {}
     sellers_by_key = {}
 
-    # PostgreSQL: users + profiles + products
     async with AsyncSessionLocal() as db:
         for b in DEMO_BUYERS:
             user, created = await _get_or_create_user(db, b["email"], "buyer", b["full_name"])
@@ -270,7 +293,6 @@ async def seed():
 
         await db.commit()
 
-    # MongoDB: conversations + starter messages
     await MongoDBClient.connect_to_db()
     await ensure_chat_indexes()
     convo_repo = ConversationRepository()
@@ -283,14 +305,12 @@ async def seed():
     await MongoDBClient.close_connection()
 
     print()
-    print("✅ Demo accounts ready (password for all: demo1234)")
-    print("   Seller 1: seller1@technova.local  — Rajesh Handicrafts")
-    print("   Seller 2: seller2@technova.local  — Meena Organics")
-    print("   Buyer 1:  buyer1@technova.local   — Arjun Mehta")
-    print("   Buyer 2:  buyer2@technova.local   — Sana Khan")
-    print("   Admin:    admin@technova.local")
-    print("   Or use the one-click demo buttons on the login screen.")
-
+    print("Demo accounts ready (password for all: demo1234)")
+    for a in DEMO_ACCOUNTS:
+        print("   Seller:", a["email"], "-", a["seller"]["business_name"])
+    for b in DEMO_BUYERS:
+        print("   Buyer: ", b["email"], "-", b["full_name"])
+    print("   Admin: ", DEMO_ADMIN["email"])
 
 if __name__ == "__main__":
     asyncio.run(seed())

@@ -1,7 +1,4 @@
-/**
- * Onboarding form — shown to new sellers after first signup.
- * Walks them through basic store setup: name, category, phone.
- */
+
 import { useState } from 'react';
 
 const CATEGORIES = [

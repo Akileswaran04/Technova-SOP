@@ -1,4 +1,3 @@
-"""Unified Inbox Router — HTTP endpoints (MongoDB chat)."""
 from typing import Optional
 
 
@@ -20,7 +19,6 @@ async def create_conversation(
     user=Depends(get_current_user),
     service: InboxService = Depends(get_inbox_service),
 ):
-    """Open (or reuse) a conversation with a buyer. One per (seller, buyer) pair."""
     return await service.get_or_create_conversation(user.id, user.role, data)
 
 
@@ -29,11 +27,6 @@ async def get_unread_total(
     user=Depends(get_current_user),
     service: InboxService = Depends(get_inbox_service),
 ):
-    """Total unread messages across all conversations — single Mongo aggregate.
-
-    Cheap endpoint for nav badges: no conversation rows are fetched or
-    serialized, so polling this is far lighter than listing conversations.
-    """
     total = await service.get_unread_total(user.id, user.role)
     return {"total": total}
 
@@ -45,7 +38,6 @@ async def list_conversations(
     user=Depends(get_current_user),
     service: InboxService = Depends(get_inbox_service),
 ):
-    """List conversations for the current seller or buyer."""
     return await service.list_conversations(user.id, user.role, cursor=cursor, limit=limit)
 
 
@@ -55,7 +47,6 @@ async def get_conversation(
     user=Depends(get_current_user),
     service: InboxService = Depends(get_inbox_service),
 ):
-    """Get a conversation (participant only)."""
     return await service.get_conversation(conversation_id, user.id, user.role)
 
 
@@ -67,7 +58,6 @@ async def list_messages(
     user=Depends(get_current_user),
     service: InboxService = Depends(get_inbox_service),
 ):
-    """Cursor-paginated messages — never a full-conversation dump."""
     return await service.list_messages(
         conversation_id, user.id, user.role, cursor=cursor, limit=limit
     )
@@ -80,7 +70,6 @@ async def send_message(
     user=Depends(get_current_user),
     service: InboxService = Depends(get_inbox_service),
 ):
-    """Send a message — idempotent via client_message_id."""
     return await service.send_message(conversation_id, user.id, user.role, data)
 
 
@@ -90,5 +79,4 @@ async def mark_read(
     user=Depends(get_current_user),
     service: InboxService = Depends(get_inbox_service),
 ):
-    """Mark conversation as read for the current participant."""
     return await service.mark_read(conversation_id, user.id, user.role)

@@ -1,8 +1,3 @@
-"""End-to-end smoke test for TECHNOVA build — run against a live server.
-
-Usage: PYTHONIOENCODING=utf-8 ./venv/Scripts/python.exe smoke_test.py
-Requires the server running on 127.0.0.1:8010.
-"""
 import json
 import sys
 import time

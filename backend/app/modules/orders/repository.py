@@ -1,16 +1,13 @@
-"""Orders Repository — database operations only."""
 from typing import Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.orders.models import Order, OrderItem
+from app.modules.orders.models import Order, OrderItem, TrackingEvent
 
 
 class OrderRepository:
-    """Repository for orders/order_items."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -69,3 +66,33 @@ class OrderRepository:
         )
         await self.db.flush()
         return await self.get_by_id(order_id)
+
+    async def add_tracking_event(
+        self,
+        order_id: int,
+        status: str,
+        actor_user_id: Optional[int] = None,
+        actor_role: Optional[str] = None,
+        location: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> TrackingEvent:
+        event = TrackingEvent(
+            order_id=order_id,
+            status=status,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            location=location,
+            notes=notes,
+        )
+        self.db.add(event)
+        await self.db.flush()
+        await self.db.refresh(event)
+        return event
+
+    async def list_tracking_events(self, order_id: int) -> list[TrackingEvent]:
+        result = await self.db.execute(
+            select(TrackingEvent)
+            .where(TrackingEvent.order_id == order_id)
+            .order_by(TrackingEvent.created_at.asc(), TrackingEvent.id.asc())
+        )
+        return list(result.scalars().all())

@@ -1,4 +1,3 @@
-"""Product Listing Repository — database operations only."""
 from typing import Optional
 
 
@@ -9,8 +8,6 @@ from app.modules.seller_profile.models import Product
 
 
 class ProductRepository:
-    """Repository for products table."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -31,11 +28,6 @@ class ProductRepository:
     async def get_by_seller(
         self, seller_id: int, limit: int = 100, offset: int = 0
     ) -> tuple[list[Product], bool]:
-        """Seller's products, newest first, paginated.
-
-        Fetches limit+1 rows to report has_more, so callers don't need a
-        separate COUNT query (every extra query is a full DB round trip).
-        """
         result = await self.db.execute(
             select(Product)
             .where(Product.seller_id == seller_id)
@@ -63,6 +55,5 @@ class ProductRepository:
         await self.db.delete(product)
         await self.db.flush()
         return True
-
 
 

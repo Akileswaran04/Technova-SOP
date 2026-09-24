@@ -1,9 +1,3 @@
-"""Orders Service — business logic, ACID in PostgreSQL.
-
-Create order → decrement stock → payment (mock) → transaction, all within one
-DB transaction. Cross-store sync happens in background workers, never in a
-fragile cross-DB transaction.
-"""
 import uuid
 from typing import Optional
 
@@ -49,8 +43,6 @@ def _serialize_order(order: Order) -> dict:
 
 
 class OrderService:
-    """Business logic for orders."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = OrderRepository(db)
@@ -73,11 +65,11 @@ class OrderService:
             raise NotFoundException("SellerProfile", str(user_id))
         return profile.id
 
-    async def create_order(self, user_id: int, data: OrderCreate) -> dict:
-        """Create order + items + mock payment + transaction atomically."""
+    async def create_order(
+        self, user_id: int, data: OrderCreate, price_overrides: Optional[dict[int, float]] = None,
+    ) -> dict:
         buyer_id = await self._get_buyer_id_from_user(user_id)
 
-        # Lock products to prevent concurrent overselling
         product_ids = [item.product_id for item in data.items]
         result = await self.db.execute(
             select(Product)
@@ -89,20 +81,18 @@ class OrderService:
             missing = set(product_ids) - set(products)
             raise NotFoundException("Product", str(sorted(missing)[0]))
 
-        # Single-seller orders: all items must belong to the same seller
         seller_ids = {products[pid].seller_id for pid in product_ids}
         if len(seller_ids) != 1:
             raise ValidationException("All order items must come from one seller")
         seller_id = seller_ids.pop()
 
-        # Validate stock and compute totals
         items = []
         total = 0.0
         for item in data.items:
             product = products[item.product_id]
             if product.stock < item.quantity:
                 raise ValidationException(f"'{product.name}' only has {product.stock} in stock")
-            unit_price = product.price
+            unit_price = (price_overrides or {}).get(item.product_id, product.price)
             line_total = unit_price * item.quantity
             total += line_total
             items.append({
@@ -112,7 +102,6 @@ class OrderService:
                 "total_price": line_total,
             })
 
-        # Decrement stock
         for item in data.items:
             product = products[item.product_id]
             product.stock -= item.quantity
@@ -121,7 +110,7 @@ class OrderService:
             "order_number": f"ORD-{uuid.uuid4().hex[:10].upper()}",
             "buyer_id": buyer_id,
             "seller_id": seller_id,
-            "status": "pending",
+            "status": "paid",
             "total_amount": round(total, 2),
             "currency": "USD",
             "payment_method": data.payment_method or "mock",
@@ -130,7 +119,6 @@ class OrderService:
         })
         await self.repo.add_items(order.id, items)
 
-        # Mock payment + transaction — internal ledger, no external provider
         payment = Payment(
             order_id=order.id,
             provider="mock",
@@ -147,9 +135,9 @@ class OrderService:
             transaction_id=f"TXN-{uuid.uuid4().hex[:10].upper()}",
         )
         self.db.add(transaction)
+        await self.repo.add_tracking_event(order.id, "paid", actor_role="system", notes="Order placed and paid")
         await self.db.flush()
 
-        # Re-fetch with eager-loaded items before serializing (no lazy IO)
         order = await self.repo.get_by_id(order.id)
         return _serialize_order(order)
 
@@ -159,6 +147,25 @@ class OrderService:
             raise NotFoundException("Order", str(order_id))
         await self._assert_access(user_id, user_role, order)
         return _serialize_order(order)
+
+    async def get_tracking(self, user_id: int, user_role: str, order_id: int) -> list[dict]:
+        order = await self.repo.get_by_id(order_id)
+        if not order:
+            raise NotFoundException("Order", str(order_id))
+        await self._assert_access(user_id, user_role, order)
+        events = await self.repo.list_tracking_events(order_id)
+        return [
+            {
+                "id": e.id,
+                "order_id": e.order_id,
+                "status": e.status,
+                "actor_role": e.actor_role,
+                "location": e.location,
+                "notes": e.notes,
+                "created_at": e.created_at,
+            }
+            for e in events
+        ]
 
     async def list_orders(
         self, user_id: int, user_role: str, cursor: Optional[str] = None, limit: int = 50
@@ -190,7 +197,6 @@ class OrderService:
             raise ForbiddenException("Only sellers and buyers can view orders")
 
     async def update_status(self, user_id: int, order_id: int, data: OrderStatusUpdate) -> dict:
-        """Seller updates order status."""
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise NotFoundException("Order", str(order_id))
@@ -198,10 +204,15 @@ class OrderService:
         if order.seller_id != seller_id:
             raise ForbiddenException("Not your order")
         updated = await self.repo.update_status(order_id, data.status)
+        await self.repo.add_tracking_event(
+            order_id, data.status,
+            actor_user_id=user_id, actor_role="seller",
+            location=data.location, notes=data.notes,
+        )
+        await self.db.flush()
         return _serialize_order(updated)
 
     async def add_review(self, user_id: int, order_id: int, data: OrderReviewCreate) -> dict:
-        """Buyer leaves a review after an order (feeds trust_scores)."""
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise NotFoundException("Order", str(order_id))
@@ -209,14 +220,12 @@ class OrderService:
         if order.buyer_id != buyer_id:
             raise ForbiddenException("Not your order")
 
-        # One review per order
         existing = await self.db.execute(
             select(Review).where(Review.order_id == order_id)
         )
         if existing.scalar_one_or_none():
             raise ValidationException("Order already reviewed")
 
-        # Review the first product in the order
         first_item = order.items[0] if order.items else None
         review = Review(
             product_id=first_item.product_id if first_item else None,

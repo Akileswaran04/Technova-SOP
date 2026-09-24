@@ -1,4 +1,3 @@
-"""Admin Router — verification review and moderation (admin role only)."""
 from typing import List, Optional
 
 
@@ -13,7 +12,6 @@ from app.modules.admin.service import AdminService
 
 router = APIRouter()
 
-# Server-side RBAC — every admin endpoint requires the admin role
 admin_only = require_roles("admin")
 
 
@@ -25,7 +23,6 @@ async def list_verifications(
     _=Depends(admin_only),
     service: AdminService = Depends(get_admin_service),
 ):
-    """List seller verifications pending review."""
     return await service.list_verifications(status=status, limit=limit, offset=offset)
 
 
@@ -36,7 +33,6 @@ async def review_verification(
     admin_user=Depends(admin_only),
     service: AdminService = Depends(get_admin_service),
 ):
-    """Approve or reject a seller verification (audit-logged)."""
     return await service.review_verification(admin_user.id, verification_id, data)
 
 
@@ -46,5 +42,4 @@ async def list_audit_logs(
     _=Depends(admin_only),
     service: AdminService = Depends(get_admin_service),
 ):
-    """List recent admin/moderation actions."""
     return await service.list_audit_logs(limit=limit)

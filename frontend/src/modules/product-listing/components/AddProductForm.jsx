@@ -1,7 +1,4 @@
-/**
- * AddProductForm — simple form to add a new product via backend API.
- * MD3 theme: tonal inputs, Material icons, 48px touch targets.
- */
+
 import { useState, useRef } from 'react';
 import { createProduct } from '../../../services/storage';
 import { DEMO_PRODUCT_CATEGORIES } from '../../../data/demoProductImages';
@@ -138,7 +135,7 @@ export default function AddProductForm({ sellerId, onBack, onAdd }) {
               )}
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-            
+
             <div className="flex flex-col gap-2">
               <span className="text-label-sm text-on-surface-variant flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[14px]">auto_awesome</span>

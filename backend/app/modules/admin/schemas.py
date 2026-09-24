@@ -1,4 +1,3 @@
-"""Pydantic schemas for admin module."""
 from datetime import datetime
 from typing import Optional, List, Literal
 
@@ -7,7 +6,6 @@ from pydantic import BaseModel, Field
 
 
 class VerificationResponse(BaseModel):
-    """Seller verification record for review."""
     id: int
     seller_id: int
     business_name: Optional[str] = None
@@ -18,13 +16,11 @@ class VerificationResponse(BaseModel):
 
 
 class VerificationDecision(BaseModel):
-    """Approve or reject a seller verification."""
     decision: Literal["approved", "rejected"]
     reason: Optional[str] = Field(None, max_length=1000)
 
 
 class AuditLogResponse(BaseModel):
-    """Audit log entry."""
     id: int
     user_id: Optional[int]
     action: str

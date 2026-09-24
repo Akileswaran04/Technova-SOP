@@ -1,4 +1,3 @@
-"""Pydantic schemas for buyer-facing discovery search."""
 from datetime import datetime
 from typing import Optional, List
 
@@ -7,7 +6,6 @@ from pydantic import BaseModel
 
 
 class SellerPublicResponse(BaseModel):
-    """Public seller profile shown to buyers."""
     id: int
     business_name: str
     business_type: Optional[str]
@@ -21,7 +19,6 @@ class SellerPublicResponse(BaseModel):
 
 
 class ProductSearchItem(BaseModel):
-    """A product result in discovery search, with seller + trust badge."""
     id: int
     name: str
     description: Optional[str]
@@ -37,7 +34,6 @@ class ProductSearchItem(BaseModel):
 
 
 class DiscoveryResponse(BaseModel):
-    """Discovery search results with cursor pagination."""
     items: List[ProductSearchItem]
     total: int
     next_cursor: Optional[str] = None

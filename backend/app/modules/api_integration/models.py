@@ -1,10 +1,3 @@
-"""
-SQLAlchemy model for external service OAuth tokens (Gmail / Microsoft Graph).
-
-Matches the `api_tokens` table in alembic migration 004_api_tokens.
-The table stores a reference to the stored credential plus metadata; the
-token payload itself should live in a secrets manager in production.
-"""
 from datetime import datetime
 
 from sqlalchemy import (
@@ -15,12 +8,10 @@ from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 
 from app.infrastructure.postgres.base import Base
 
-# PG ENUM type matching migration 004 (create_type=False — exists already)
 apiservice_enum = PG_ENUM("gmail", "outlook", name="apiservice", create_type=False)
 
 
 class ApiToken(Base):
-    """OAuth credential reference for an external integration (Gmail/Graph)."""
     __tablename__ = "api_tokens"
     __table_args__ = (
         UniqueConstraint("user_id", "service", name="uq_api_tokens_user_service"),
@@ -29,7 +20,7 @@ class ApiToken(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    service = Column(apiservice_enum, nullable=False)  # 'gmail' | 'outlook'
+    service = Column(apiservice_enum, nullable=False)
     token_ref = Column(String(500), nullable=False)
     provider_account = Column(String(254), nullable=True)
     scopes = Column(Text, nullable=True)

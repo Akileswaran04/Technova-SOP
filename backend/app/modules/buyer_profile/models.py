@@ -1,8 +1,3 @@
-"""
-Buyer Profile SQLAlchemy model.
-
-Matches the `buyer_profiles` table created in alembic migration 001_initial_schema.
-"""
 from datetime import datetime
 
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Integer
@@ -12,18 +7,15 @@ from app.infrastructure.postgres.base import Base
 
 
 class BuyerProfile(Base):
-    """Buyer identity and preferences — separate from identity (users)."""
     __tablename__ = "buyer_profiles"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
 
-    # Identity
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=True)
 
-    # Location / preferences
     default_address = Column(String(500), nullable=True)
     city = Column(String(100), nullable=True)
     country = Column(String(100), nullable=True)
@@ -33,9 +25,25 @@ class BuyerProfile(Base):
     company_name = Column(String(255), nullable=True)
     tax_id = Column(String(100), nullable=True)
 
-    # Timestamps
     created_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
 
-    # Relationships
     user = relationship("User", back_populates="buyer_profile")
+
+
+class Address(Base):
+    __tablename__ = "addresses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    buyer_id = Column(Integer, ForeignKey("buyer_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    label = Column(String(100), nullable=False, default="Home")
+    line1 = Column(String(255), nullable=False)
+    line2 = Column(String(255), nullable=True)
+    city = Column(String(100), nullable=False)
+    state = Column(String(100), nullable=True)
+    postal_code = Column(String(20), nullable=True)
+    country = Column(String(100), nullable=False, default="India")
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
+
+    buyer = relationship("BuyerProfile")

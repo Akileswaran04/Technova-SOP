@@ -1,18 +1,18 @@
-/**
- * BuyerApp — buyer-facing application (new screens: discovery, chat, orders).
- * Single login: routed here automatically when the JWT role is 'buyer'.
- */
-import { useState, useCallback } from 'react';
+
+import { useState, useCallback, useEffect } from 'react';
+import HomePage from './components/HomePage';
 import DiscoverPage from './components/DiscoverPage';
 import ProductDetail from './components/ProductDetail';
 import BuyerInbox from './components/BuyerInbox';
 import OrdersPage from './components/OrdersPage';
 import BuyerProfilePage from './components/BuyerProfilePage';
+import { CartDrawer } from '../cart';
 import Toast from '../../components/shared/Toast';
-import { getSession, clearSession } from '../../services/storage';
+import { getSession, clearSession, getCart } from '../../services/storage';
 
 const TABS = [
-  { key: 'discover', icon: 'search', label: 'Discover' },
+  { key: 'home', icon: 'home', label: 'Home' },
+  { key: 'discover', icon: 'search', label: 'Catalogue' },
   { key: 'inbox', icon: 'chat', label: 'Inbox' },
   { key: 'orders', icon: 'receipt_long', label: 'Orders' },
   { key: 'profile', icon: 'person', label: 'Profile' },
@@ -20,13 +20,29 @@ const TABS = [
 
 export default function BuyerApp({ onLogout }) {
   const session = getSession();
-  const [activeTab, setActiveTab] = useState('discover');
+  const [activeTab, setActiveTab] = useState('home');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [inboxKey, setInboxKey] = useState(0);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+  const [ordersKey, setOrdersKey] = useState(0);
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
+  }, []);
+
+  useEffect(() => {
+    getCart().then((c) => setCartCount(c.itemCount)).catch(() => {});
+  }, []);
+
+  const handleCartUpdate = useCallback((cart) => {
+    setCartCount(cart.itemCount);
+  }, []);
+
+  const handleOrderPlaced = useCallback(() => {
+    setActiveTab('orders');
+    setOrdersKey((k) => k + 1);
   }, []);
 
   const handleChatOpened = useCallback((conversationId) => {
@@ -37,7 +53,6 @@ export default function BuyerApp({ onLogout }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-surface-container-lowest border-b border-outline-variant">
         <div className="max-w-max-width mx-auto px-4 lg:px-10 h-16 flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
@@ -48,6 +63,18 @@ export default function BuyerApp({ onLogout }) {
             <p className="text-label-sm text-on-surface-variant leading-tight">Buyer · {session?.email}</p>
           </div>
           <button
+            onClick={() => setCartOpen(true)}
+            className="relative p-2 rounded-full hover:bg-surface-container text-on-surface-variant"
+            title="Cart"
+          >
+            <span className="material-symbols-outlined">shopping_cart</span>
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center">
+                {cartCount > 99 ? '99+' : cartCount}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => { clearSession(); onLogout(); }}
             className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant"
             title="Logout"
@@ -56,7 +83,6 @@ export default function BuyerApp({ onLogout }) {
           </button>
         </div>
 
-        {/* Tabs */}
         <nav className="max-w-max-width mx-auto px-4 lg:px-10 flex gap-1 overflow-x-auto">
           {TABS.map((tab) => (
             <button
@@ -76,13 +102,13 @@ export default function BuyerApp({ onLogout }) {
       </header>
 
       <main className="max-w-max-width mx-auto px-4 lg:px-10 py-6 pb-24 sm:pb-6">
+        {activeTab === 'home' && <HomePage onOpenProduct={setSelectedProduct} onGoToCatalogue={() => setActiveTab('discover')} />}
         {activeTab === 'discover' && <DiscoverPage onOpenProduct={setSelectedProduct} />}
         {activeTab === 'inbox' && <BuyerInbox key={inboxKey} buyerId={session?.buyerId} onToast={showToast} />}
-        {activeTab === 'orders' && <OrdersPage onToast={showToast} />}
+        {activeTab === 'orders' && <OrdersPage key={ordersKey} onToast={showToast} />}
         {activeTab === 'profile' && <BuyerProfilePage onToast={showToast} />}
       </main>
 
-      {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-surface-container-lowest border-t border-outline-variant z-50 lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex justify-around items-center h-16">
           {TABS.map((tab) => (
@@ -105,6 +131,17 @@ export default function BuyerApp({ onLogout }) {
           onClose={() => setSelectedProduct(null)}
           onChatOpened={handleChatOpened}
           onToast={showToast}
+          onCartUpdate={handleCartUpdate}
+          onOrderPlaced={handleOrderPlaced}
+        />
+      )}
+
+      {cartOpen && (
+        <CartDrawer
+          onClose={() => setCartOpen(false)}
+          onToast={showToast}
+          onCartUpdate={handleCartUpdate}
+          onOrderPlaced={handleOrderPlaced}
         />
       )}
 

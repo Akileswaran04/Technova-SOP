@@ -1,4 +1,3 @@
-"""SQLAlchemy models for TECHNOVA application."""
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
@@ -22,22 +21,13 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 
-# ============================================
-# Enums
-# ============================================
-
-
 class UserRole(str, PyEnum):
-    """User roles in the system."""
-
     ADMIN = "admin"
     SELLER = "seller"
     BUYER = "buyer"
 
 
 class SellerProfileStatus(str, PyEnum):
-    """Seller profile verification status."""
-
     DRAFT = "draft"
     SUBMITTED = "submitted"
     UNDER_REVIEW = "under_review"
@@ -47,8 +37,6 @@ class SellerProfileStatus(str, PyEnum):
 
 
 class VerificationType(str, PyEnum):
-    """Types of seller verification."""
-
     BUSINESS_LICENSE = "business_license"
     TAX_DOCUMENT = "tax_document"
     IDENTITY = "identity"
@@ -56,30 +44,19 @@ class VerificationType(str, PyEnum):
 
 
 class VerificationStatus(str, PyEnum):
-    """Status of individual verification."""
-
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
 
 
 class ProductStatus(str, PyEnum):
-    """Product listing status."""
-
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
     DELETED = "deleted"
 
 
-# ============================================
-# User Management
-# ============================================
-
-
 class User(Base):
-    """User base model - represents both buyers and sellers."""
-
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -90,13 +67,12 @@ class User(Base):
     role = Column(Enum(UserRole), nullable=False, default=UserRole.BUYER)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
-    oauth_provider = Column(String(50), nullable=True)  # google, microsoft, etc.
+    oauth_provider = Column(String(50), nullable=True)
     oauth_subject = Column(String(255), nullable=True)
     profile_picture_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     seller_profile = relationship("SellerProfile", back_populates="user", uselist=False)
     buyer_profile = relationship("BuyerProfile", back_populates="user", uselist=False)
 
@@ -107,14 +83,7 @@ class User(Base):
     )
 
 
-# ============================================
-# Seller Profile Module
-# ============================================
-
-
 class SellerProfile(Base):
-    """Seller business profile."""
-
     __tablename__ = "seller_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -146,7 +115,6 @@ class SellerProfile(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     user = relationship("User", back_populates="seller_profile")
     verifications = relationship("SellerVerification", back_populates="seller_profile", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="seller", cascade="all, delete-orphan")
@@ -160,23 +128,20 @@ class SellerProfile(Base):
 
 
 class SellerVerification(Base):
-    """Individual seller verification documents and status."""
-
     __tablename__ = "seller_verifications"
 
     id = Column(Integer, primary_key=True, index=True)
     seller_id = Column(Integer, ForeignKey("seller_profiles.id"), nullable=False, index=True)
     verification_type = Column(Enum(VerificationType), nullable=False)
-    document_reference = Column(String(500), nullable=True)  # S3 path or reference
+    document_reference = Column(String(500), nullable=True)
     status = Column(Enum(VerificationStatus), default=VerificationStatus.PENDING, nullable=False)
-    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Admin who reviewed
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     rejection_reason = Column(Text, nullable=True)
     comments = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     seller_profile = relationship("SellerProfile", back_populates="verifications")
     reviewed_by_user = relationship("User", foreign_keys=[reviewed_by])
 
@@ -188,14 +153,7 @@ class SellerVerification(Base):
     )
 
 
-# ============================================
-# Buyer Profile Module (Future)
-# ============================================
-
-
 class BuyerProfile(Base):
-    """Buyer profile information."""
-
     __tablename__ = "buyer_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -214,7 +172,6 @@ class BuyerProfile(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     user = relationship("User", back_populates="buyer_profile")
     orders = relationship("Order", back_populates="buyer")
     reviews = relationship("Review", back_populates="buyer")
@@ -225,14 +182,7 @@ class BuyerProfile(Base):
     )
 
 
-# ============================================
-# Product Listing Module (Future)
-# ============================================
-
-
 class Product(Base):
-    """Product listings."""
-
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -246,14 +196,13 @@ class Product(Base):
     stock_quantity = Column(Integer, default=0, nullable=False)
     sku = Column(String(100), nullable=True, index=True)
     status = Column(Enum(ProductStatus), default=ProductStatus.DRAFT, nullable=False, index=True)
-    images_urls = Column(String(2000), nullable=True)  # JSON array of URLs
-    tags = Column(String(500), nullable=True)  # JSON array
+    images_urls = Column(String(2000), nullable=True)
+    tags = Column(String(500), nullable=True)
     rating = Column(Float, nullable=True)
     review_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     seller = relationship("SellerProfile", back_populates="products")
     order_items = relationship("OrderItem", back_populates="product")
     reviews = relationship("Review", back_populates="product")
@@ -267,14 +216,7 @@ class Product(Base):
     )
 
 
-# ============================================
-# Order Management (Future)
-# ============================================
-
-
 class OrderStatus(str, PyEnum):
-    """Order status."""
-
     PENDING = "pending"
     CONFIRMED = "confirmed"
     SHIPPED = "shipped"
@@ -284,8 +226,6 @@ class OrderStatus(str, PyEnum):
 
 
 class Order(Base):
-    """Orders placed by buyers."""
-
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -302,7 +242,6 @@ class Order(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     buyer = relationship("BuyerProfile", back_populates="orders")
     seller = relationship("SellerProfile", foreign_keys=[seller_id], back_populates="orders_as_seller")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
@@ -317,8 +256,6 @@ class Order(Base):
 
 
 class OrderItem(Base):
-    """Individual items in an order."""
-
     __tablename__ = "order_items"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -329,7 +266,6 @@ class OrderItem(Base):
     total_price = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
     order = relationship("Order", back_populates="items")
     product = relationship("Product", back_populates="order_items")
 
@@ -339,14 +275,7 @@ class OrderItem(Base):
     )
 
 
-# ============================================
-# Transaction Management (Future)
-# ============================================
-
-
 class TransactionStatus(str, PyEnum):
-    """Transaction status."""
-
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -354,8 +283,6 @@ class TransactionStatus(str, PyEnum):
 
 
 class Transaction(Base):
-    """Financial transactions."""
-
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -364,12 +291,11 @@ class Transaction(Base):
     currency = Column(String(3), default="USD", nullable=False)
     status = Column(Enum(TransactionStatus), default=TransactionStatus.PENDING, nullable=False)
     payment_method = Column(String(50), nullable=True)
-    transaction_id = Column(String(100), unique=True, nullable=True)  # External payment ID
+    transaction_id = Column(String(100), unique=True, nullable=True)
     failure_reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     order = relationship("Order", back_populates="transaction")
 
     __table_args__ = (
@@ -378,14 +304,7 @@ class Transaction(Base):
     )
 
 
-# ============================================
-# Review & Rating System (Future)
-# ============================================
-
-
 class Review(Base):
-    """Product and seller reviews."""
-
     __tablename__ = "reviews"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -393,7 +312,7 @@ class Review(Base):
     buyer_id = Column(Integer, ForeignKey("buyer_profiles.id"), nullable=False, index=True)
     seller_id = Column(Integer, ForeignKey("seller_profiles.id"), nullable=False, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
-    rating = Column(Integer, nullable=False)  # 1-5
+    rating = Column(Integer, nullable=False)
     title = Column(String(255), nullable=True)
     comment = Column(Text, nullable=True)
     is_verified_purchase = Column(Boolean, default=False)
@@ -401,7 +320,6 @@ class Review(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
     product = relationship("Product", back_populates="reviews")
     buyer = relationship("BuyerProfile", back_populates="reviews")
     seller = relationship("SellerProfile", foreign_keys=[seller_id])
@@ -413,23 +331,16 @@ class Review(Base):
     )
 
 
-# ============================================
-# Trust & Reputation System (Future)
-# ============================================
-
-
 class TrustScore(Base):
-    """Seller trust and reputation scoring."""
-
     __tablename__ = "trust_scores"
 
     id = Column(Integer, primary_key=True, index=True)
     seller_id = Column(Integer, ForeignKey("seller_profiles.id"), unique=True, nullable=False, index=True)
-    overall_score = Column(Float, default=0.0)  # 0-100
-    review_score = Column(Float, default=0.0)  # Based on reviews
-    compliance_score = Column(Float, default=0.0)  # Payment, delivery compliance
-    communication_score = Column(Float, default=0.0)  # Response time
-    return_rate = Column(Float, default=0.0)  # Percentage
+    overall_score = Column(Float, default=0.0)
+    review_score = Column(Float, default=0.0)
+    compliance_score = Column(Float, default=0.0)
+    communication_score = Column(Float, default=0.0)
+    return_rate = Column(Float, default=0.0)
     dispute_count = Column(Integer, default=0)
     successful_orders = Column(Integer, default=0)
     cancellation_rate = Column(Float, default=0.0)
@@ -441,14 +352,7 @@ class TrustScore(Base):
     )
 
 
-# ============================================
-# Analytics (Future)
-# ============================================
-
-
 class Analytics(Base):
-    """Analytics and business metrics."""
-
     __tablename__ = "analytics"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -469,14 +373,7 @@ class Analytics(Base):
     )
 
 
-# ============================================
-# Audit Logging
-# ============================================
-
-
 class AuditLog(Base):
-    """Audit logs for system actions."""
-
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -484,10 +381,10 @@ class AuditLog(Base):
     action = Column(String(100), nullable=False, index=True)
     resource_type = Column(String(100), nullable=False)
     resource_id = Column(Integer, nullable=True)
-    changes = Column(Text, nullable=True)  # JSON of before/after
+    changes = Column(Text, nullable=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
-    status = Column(String(20), nullable=True)  # success, failure
+    status = Column(String(20), nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 

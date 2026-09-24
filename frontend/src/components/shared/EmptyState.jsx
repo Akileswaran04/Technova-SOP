@@ -1,7 +1,4 @@
-/**
- * EmptyState — reusable empty state component for modules.
- * Material Design 3: centered icon, title, description, optional action button.
- */
+
 export default function EmptyState({ icon = 'inbox', title, description, actionLabel, onAction }) {
   return (
     <div className="text-center py-16 bg-surface-container-lowest border border-outline-variant rounded-xl">

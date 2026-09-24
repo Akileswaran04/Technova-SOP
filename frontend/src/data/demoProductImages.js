@@ -1,8 +1,4 @@
-/**
- * Demo product images organized by category.
- * All sourced from Unsplash (free-to-use).
- * Used by AddProductForm and ProductDetailModal.
- */
+
 export const DEMO_PRODUCT_CATEGORIES = [
   {
     key: 'food',
@@ -131,7 +127,6 @@ export const DEMO_PRODUCT_CATEGORIES = [
   },
 ];
 
-/** Flat list of all images for backward compatibility */
 export const ALL_DEMO_IMAGES = DEMO_PRODUCT_CATEGORIES.flatMap((cat) =>
   cat.images.map((img) => ({ ...img, category: cat.key }))
 );

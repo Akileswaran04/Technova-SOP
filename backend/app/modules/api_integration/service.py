@@ -1,22 +1,3 @@
-"""
-API Integration Service — external channel sync (Gmail / Microsoft Graph).
-
-Owns the OAuth connection lifecycle for a seller:
-  connect  → generate state (bound to the user in Redis), return auth URL
-  callback → validate state, exchange code, upsert an `api_tokens` row
-  list     → status of each service for the user
-  disconnect → remove the token
-  sync     → pull the external inbox into the unified inbox (MongoDB
-             conversations/messages tagged with `source: gmail|outlook`)
-
-When no provider client credentials are configured (mock mode), the connect
-URL loops straight back to the callback with a `mock-` code so the whole flow
-can be demonstrated locally. Real OAuth exchange is implemented behind the
-same interface and activates automatically once credentials are set.
-
-Emails land in the same MongoDB conversations/messages collections as in-app
-chat — this is the "unified" inbox: every message is tagged by source.
-"""
 import logging
 import secrets
 import urllib.parse
@@ -41,10 +22,8 @@ logger = logging.getLogger(__name__)
 
 SERVICES = ("gmail", "outlook")
 
-OAUTH_STATE_TTL = 600  # seconds — state expires after 10 minutes
+OAUTH_STATE_TTL = 600
 
-# Sample "synced email" content shown in mock mode. Real sync replaces these
-# with messages pulled from the provider API.
 SAMPLE_EMAILS = {
     "gmail": [
         ("buyer", "Hi, I saw your store on the marketplace — do you ship to Delhi?"),
@@ -60,15 +39,11 @@ SERVICE_LABELS = {"gmail": "Google Mail", "outlook": "Microsoft Outlook"}
 
 
 class IntegrationService:
-    """Business logic for external integrations."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    # ── OAuth connect ──
 
     async def connect(self, user: User, service: str) -> dict:
-        """Create an OAuth state and return the provider authorization URL."""
         service = self._check_service(service)
         if user.role != "seller":
             raise ValidationException("Only sellers can connect external inboxes")
@@ -85,7 +60,6 @@ class IntegrationService:
             auth_url = self._build_real_auth_url(service, client_id, redirect_uri, state)
             mode = "oauth"
         else:
-            # Mock mode — the "authorization page" is our own callback.
             base = settings.PUBLIC_BASE_URL.rstrip("/")
             auth_url = (
                 f"{base}/api/v1/integrations/{service}/callback"
@@ -96,7 +70,6 @@ class IntegrationService:
         return {"service": service, "auth_url": auth_url, "state": state, "mode": mode}
 
     async def callback(self, service: str, code: str, state: str) -> dict:
-        """Validate state, exchange the code, and store the token reference."""
         service = self._check_service(service)
         if not code or not state:
             raise ValidationException("code and state are required")
@@ -123,19 +96,8 @@ class IntegrationService:
         }
 
     def _exchange_code(self, service: str, code: str):
-        """Exchange an authorization code for tokens.
-
-        Mock mode: any `mock-` code is accepted and a synthetic account is
-        attached. Real mode: POST to the provider token endpoint (httpx) using
-        the configured client credentials — the token payload then lives in a
-        secrets manager referenced by `token_ref`.
-        """
         client_id, redirect_uri = self._provider_config(service)
         if client_id and not code.startswith("mock-"):
-            # Real OAuth exchange would call the provider here:
-            #   httpx.post(token_url, data={code, client_id, client_secret, redirect_uri})
-            # For now the exchange is documented but not executed — the code is
-            # kept as token_ref so wiring the real provider is a drop-in change.
             logger.warning("Real OAuth exchange not configured for %s — storing code ref", service)
             return f"account@{service}.example.com", "offline_access", utcnow() + timedelta(days=30)
 
@@ -143,7 +105,6 @@ class IntegrationService:
         scopes = "gmail.readonly" if service == "gmail" else "offline_access Mail.Read"
         return account, scopes, utcnow() + timedelta(days=30)
 
-    # ── Status ──
 
     async def list_integrations(self, user: User) -> list[dict]:
         rows = await self._get_tokens(user.id)
@@ -172,22 +133,18 @@ class IntegrationService:
         await self.db.commit()
         return {"service": service, "connected": False}
 
-    # ── Sync into the unified inbox ──
 
     async def sync(self, user: User, service: str) -> dict:
-        """Pull the connected inbox into MongoDB conversations (mock provider)."""
         service = self._check_service(service)
         token = await self._get_token(user.id, service)
         if not token or not token.is_active:
             raise ValidationException(f"{SERVICE_LABELS[service]} is not connected — connect it first")
 
-        # Resolve the seller profile (participant id for conversations)
         profile_result = await self.db.execute(select(SellerProfile).where(SellerProfile.user_id == user.id))
         seller_profile = profile_result.scalar_one_or_none()
         if not seller_profile:
             raise NotFoundException("SellerProfile", str(user.id))
 
-        # Pick a buyer: prefer one we already chat with, else the first buyer.
         buyer_profile = await self._pick_buyer(seller_profile.id)
         if not buyer_profile:
             raise ValidationException("No buyers exist to sync an email conversation with")
@@ -227,7 +184,6 @@ class IntegrationService:
             created += 1
 
         if created:
-            # Surface the new messages to any open sockets for this seller
             await RealtimeService.publish(
                 str(convo["_id"]), "message:new",
                 {"message": {"conversation_id": str(convo["_id"]), "source": service, "sync": True}},
@@ -255,7 +211,6 @@ class IntegrationService:
         result = await self.db.execute(select(BuyerProfile).order_by(BuyerProfile.id))
         return result.scalars().first()
 
-    # ── Helpers ──
 
     def _check_service(self, service: str) -> str:
         if service not in SERVICES:

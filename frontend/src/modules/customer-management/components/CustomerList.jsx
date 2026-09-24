@@ -1,8 +1,4 @@
-/**
- * CustomerList — list of customers with MD3 theme.
- * Material icons, tonal chips, 48px touch targets.
- * Data loaded from backend API + derived from product reviews.
- */
+
 import { useState, useEffect } from 'react';
 import { createCustomer, getCustomersBySeller, getDerivedCustomers } from '../../../services/storage';
 import CustomerDrawer from './CustomerDrawer';
@@ -20,9 +16,7 @@ export default function CustomerList({ sellerId, products = [], onUpdate, onToas
     let cancelled = false;
     (async () => {
       try {
-        // Manual customers come from the API; review-derived customers are
-        // computed from the products already loaded in App state (this used
-        // to re-fetch the entire catalog via getDerivedCustomers).
+
         const manual = await getCustomersBySeller(sellerId);
         const derived = getDerivedCustomers(products);
         if (!cancelled) {
@@ -68,7 +62,7 @@ export default function CustomerList({ sellerId, products = [], onUpdate, onToas
       setNewName('');
       setNewContact('');
       setShowAddForm(false);
-      // Reload customers
+
       const updated = await getCustomersBySeller(sellerId);
       setManualCustomers(updated);
       onUpdate();

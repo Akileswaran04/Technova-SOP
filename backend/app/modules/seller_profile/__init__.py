@@ -1,1 +1,1 @@
-"""Seller Profile module."""
+pass

@@ -1,23 +1,21 @@
-/**
- * ProductDetail — full product view with seller info, start-a-conversation
- * and place-an-order actions (buyer role).
- */
-import { useState, useEffect } from 'react';
-import { getProductById, getSellerPublic, createConversation, createOrder } from '../../../services/storage';
 
-export default function ProductDetail({ productId, sellerId, onClose, onChatOpened, onToast }) {
+import { useState, useEffect } from 'react';
+import { getProductById, getSellerPublic, createConversation, createOrder, addToCart } from '../../../services/storage';
+import NegotiationPanel from './NegotiationPanel';
+
+export default function ProductDetail({ productId, sellerId, onClose, onChatOpened, onToast, onCartUpdate, onOrderPlaced }) {
   const [product, setProduct] = useState(null);
   const [seller, setSeller] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [buying, setBuying] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        // Product + seller info fetched in parallel (sellerId comes from the
-        // discover result), instead of two sequential round-trips
+
         const [p, s] = await Promise.all([
           getProductById(productId),
           sellerId ? getSellerPublic(sellerId) : Promise.resolve(null),
@@ -56,6 +54,21 @@ export default function ProductDetail({ productId, sellerId, onClose, onChatOpen
       setError(err.message || 'Order failed');
     } finally {
       setBuying(false);
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (!product) return;
+    setAddingToCart(true);
+    setError('');
+    try {
+      const cart = await addToCart(product.id, quantity);
+      onCartUpdate?.(cart);
+      onToast?.(`Added ${quantity} × ${product.name} to cart`);
+    } catch (err) {
+      setError(err.message || 'Could not add to cart');
+    } finally {
+      setAddingToCart(false);
     }
   };
 
@@ -140,14 +153,29 @@ export default function ProductDetail({ productId, sellerId, onClose, onChatOpen
                   Chat
                 </button>
                 <button
-                  onClick={handleBuy}
-                  disabled={buying || !product.stock}
-                  className="flex-1 h-12 rounded-lg bg-primary text-on-primary text-label-md flex items-center justify-center gap-2 disabled:opacity-50"
+                  onClick={handleAddToCart}
+                  disabled={addingToCart || !product.stock}
+                  className="flex-1 h-12 rounded-lg border-2 border-primary text-primary text-label-md flex items-center justify-center gap-2 hover:bg-surface-container-low transition-colors disabled:opacity-50"
                 >
-                  <span className="material-symbols-outlined text-[18px]">shopping_cart</span>
-                  {buying ? 'Placing...' : `Buy · $${(product.price * quantity).toLocaleString()}`}
+                  <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>
+                  {addingToCart ? 'Adding...' : 'Add to Cart'}
                 </button>
               </div>
+              <button
+                onClick={handleBuy}
+                disabled={buying || !product.stock}
+                className="w-full h-12 rounded-lg bg-primary text-on-primary text-label-md flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[18px]">bolt</span>
+                {buying ? 'Placing...' : `Buy Now · $${(product.price * quantity).toLocaleString()}`}
+              </button>
+
+              <NegotiationPanel
+                product={product}
+                quantity={quantity}
+                onToast={onToast}
+                onOrderPlaced={(order) => { onOrderPlaced?.(order); onClose(); }}
+              />
             </>
           )}
         </div>

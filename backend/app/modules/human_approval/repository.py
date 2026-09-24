@@ -1,4 +1,3 @@
-"""Human Approval Repository — MongoDB ai_drafts operations."""
 from typing import Optional
 
 from bson import ObjectId
@@ -8,8 +7,6 @@ from app.infrastructure.mongodb.chat import get_drafts_collection, utcnow
 
 
 class DraftRepository:
-    """Repository for the ai_drafts collection."""
-
     async def create(self, data: dict) -> dict:
         drafts = await get_drafts_collection()
         data["createdAt"] = utcnow()

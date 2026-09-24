@@ -1,7 +1,4 @@
-/**
- * BottomNav — mobile-first bottom tab navigation.
- * Now includes Inbox with unread badge.
- */
+
 import { getNavTabs, TAB_KEYS } from '../modules/MODULES';
 
 const TABS = getNavTabs();

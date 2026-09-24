@@ -1,16 +1,10 @@
-/**
- * useChatSocket — authenticated WebSocket chat hook (server derives the user
- * from the JWT; never trust client-supplied ids).
- *
- * Events out: join / send / typing / read / ping
- * Events in: joined / sync / ack / message:new / typing / read / pong
- */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const WS_BASE = (import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/chat');
 
 export default function useChatSocket() {
-  const [status, setStatus] = useState('idle'); // idle | connecting | open | closed
+  const [status, setStatus] = useState('idle');
   const socketRef = useRef(null);
   const handlersRef = useRef({});
   const joinedConversationsRef = useRef(new Set());
@@ -25,7 +19,7 @@ export default function useChatSocket() {
 
     ws.onopen = () => {
       setStatus('open');
-      // Rejoin all previously joined conversations (reconnection)
+
       for (const conversationId of joinedConversationsRef.current) {
         ws.send(JSON.stringify({ type: 'join', conversation_id: conversationId }));
       }
@@ -37,7 +31,7 @@ export default function useChatSocket() {
         const handler = handlersRef.current[frame.event];
         if (handler) handler(frame);
       } catch {
-        // ignore malformed frames
+
       }
     };
 
@@ -80,7 +74,6 @@ export default function useChatSocket() {
     joinedConversationsRef.current.delete(conversationId);
   }, []);
 
-  // Auto-connect on mount
   useEffect(() => {
     if (localStorage.getItem('technova_token')) connect();
     return () => disconnect();

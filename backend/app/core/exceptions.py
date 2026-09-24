@@ -1,17 +1,12 @@
-"""
-Custom exception classes for TECHNOVA.
-"""
 
 from fastapi import HTTPException, status
 
 
 class TechnovaException(Exception):
-    """Base exception for TECHNOVA."""
     pass
 
 
 class NotFoundException(TechnovaException):
-    """Resource not found."""
     def __init__(self, resource: str, resource_id: str):
         self.resource = resource
         self.resource_id = resource_id
@@ -19,28 +14,24 @@ class NotFoundException(TechnovaException):
 
 
 class ConflictException(TechnovaException):
-    """Resource already exists."""
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
 
 
 class ValidationException(TechnovaException):
-    """Validation error."""
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
 
 
 class UnauthorizedException(TechnovaException):
-    """Authentication required."""
     def __init__(self, message: str = "Authentication required"):
         self.message = message
         super().__init__(message)
 
 
 class ForbiddenException(TechnovaException):
-    """Insufficient permissions."""
     def __init__(self, message: str = "Insufficient permissions"):
         self.message = message
         super().__init__(message)

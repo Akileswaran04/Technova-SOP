@@ -1,4 +1,3 @@
-"""Product Listing Router — HTTP endpoints only."""
 from typing import List
 
 
@@ -15,8 +14,6 @@ from app.modules.product_listing.service import ProductService
 router = APIRouter()
 
 
-# ── Products ──
-
 @router.get("", response_model=ProductListResponse)
 async def list_products(
     limit: int = Query(100, ge=1, le=500),
@@ -24,7 +21,6 @@ async def list_products(
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """List the current seller's products, paginated (offset-based)."""
     return await service.get_products_by_seller(int(user_id), limit=limit, offset=offset)
 
 
@@ -34,7 +30,6 @@ async def create_product(
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Create a new product."""
     return await service.create_product(int(user_id), data)
 
 
@@ -43,7 +38,6 @@ async def get_product(
     product_id: int,
     service: ProductService = Depends(get_product_service),
 ):
-    """Get a product by ID."""
     return await service.get_product(product_id)
 
 
@@ -54,7 +48,6 @@ async def update_product(
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Update a product — owner only."""
     return await service.update_product(int(user_id), product_id, data)
 
 
@@ -64,7 +57,6 @@ async def delete_product(
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Delete a product — owner only."""
     await service.delete_product(int(user_id), product_id)
 
 
@@ -75,7 +67,6 @@ async def adjust_stock(
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Adjust product stock by delta amount — owner only."""
     return await service.adjust_stock(int(user_id), product_id, data.delta)
 
 
@@ -84,18 +75,14 @@ async def toggle_like(
     product_id: int,
     service: ProductService = Depends(get_product_service),
 ):
-    """Like a product."""
     return await service.toggle_like(product_id)
 
-
-# ── Reviews ──
 
 @router.get("/{product_id}/reviews", response_model=List[ReviewResponse])
 async def list_reviews(
     product_id: int,
     service: ProductService = Depends(get_product_service),
 ):
-    """List reviews for a product (public)."""
     return await service.get_reviews(product_id)
 
 
@@ -106,7 +93,6 @@ async def add_review(
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Add a review to a product — buyer role."""
     return await service.add_review(int(user_id), product_id, data)
 
 
@@ -118,5 +104,4 @@ async def reply_to_review(
     user_id: str = Depends(get_current_user_id),
     service: ProductService = Depends(get_product_service),
 ):
-    """Seller reply to a review — owner only."""
     return await service.reply_to_review(int(user_id), review_id, data)

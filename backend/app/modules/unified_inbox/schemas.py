@@ -1,4 +1,3 @@
-"""Pydantic schemas for unified inbox (MongoDB-backed chat)."""
 from datetime import datetime
 from typing import Optional, List, Literal
 
@@ -7,12 +6,10 @@ from pydantic import BaseModel, Field
 
 
 class ConversationCreate(BaseModel):
-    """Open (or reuse) a conversation with a buyer."""
     buyer_id: int = Field(..., description="Existing buyer profile id")
 
 
 class ConversationResponse(BaseModel):
-    """Conversation summary."""
     id: str
     seller_id: int
     buyer_id: int
@@ -25,7 +22,6 @@ class ConversationResponse(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    """Send a message in a conversation."""
     content: str = Field(..., min_length=1, max_length=4000)
     message_type: Literal["text", "attachment"] = "text"
     source: Literal["in_app", "gmail", "outlook"] = "in_app"
@@ -36,16 +32,17 @@ class MessageCreate(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    """Message document."""
     id: str
     conversation_id: str
     sender_id: int
-    sender_type: str  # seller | buyer
+    sender_type: str
     sender_name: Optional[str] = None
     content: str
     message_type: str = "text"
     source: str = "in_app"
     sentiment: Optional[dict] = None
+    translated_content: Optional[str] = None
+    translated_language: Optional[str] = None
     sequence_number: int
     attachments: List[str] = Field(default_factory=list)
     created_at: Optional[datetime] = None
@@ -54,13 +51,11 @@ class MessageResponse(BaseModel):
 
 
 class MessagePage(BaseModel):
-    """Cursor-paginated messages page."""
     items: List[MessageResponse]
     next_cursor: Optional[str] = None
     limit: int
 
 
 class TypingEvent(BaseModel):
-    """Typing indicator payload."""
     conversation_id: str
     is_typing: bool

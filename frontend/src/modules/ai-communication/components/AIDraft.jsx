@@ -1,7 +1,4 @@
-/**
- * AIDraft — Shows an AI-generated response draft with emotion analysis,
- * strategy indicator, and approval controls (Accept / Edit / Rewrite).
- */
+
 import { useState, useRef, useEffect } from 'react';
 
 const emotionConfig = {
@@ -41,7 +38,6 @@ export default function AIDraft({ draft, onAccept, onEdit, onRewrite, onDismiss 
 
   return (
     <div className="mx-4 mb-3 bg-gradient-to-r from-primary-container/30 to-tertiary-container/20 border border-primary/20 rounded-2xl p-4 shadow-sm animate-in slide-in-from-bottom-2">
-      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[18px] text-primary">auto_awesome</span>
@@ -52,7 +48,6 @@ export default function AIDraft({ draft, onAccept, onEdit, onRewrite, onDismiss 
         </button>
       </div>
 
-      {/* Analysis badges */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-medium ${emotion.color} ${emotion.bg}`}>
           <span className="material-symbols-outlined text-[14px]">{emotion.icon}</span>
@@ -68,7 +63,6 @@ export default function AIDraft({ draft, onAccept, onEdit, onRewrite, onDismiss 
         </span>
       </div>
 
-      {/* Draft text */}
       {isEditing ? (
         <div className="mb-3">
           <textarea
@@ -99,7 +93,6 @@ export default function AIDraft({ draft, onAccept, onEdit, onRewrite, onDismiss 
         </div>
       )}
 
-      {/* Action buttons */}
       {!isEditing && (
         <div className="flex items-center gap-2">
           <button

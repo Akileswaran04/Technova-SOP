@@ -1,7 +1,4 @@
-/**
- * DocumentUpload — upload and manage business documents with MD3 theme.
- * Material icons, tonal chips, clean layout.
- */
+
 import { useRef } from 'react';
 import { generateId } from '../../../hooks/useLocalStorage';
 

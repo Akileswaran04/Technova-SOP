@@ -1,10 +1,3 @@
-"""
-MongoDB chat collections — conversations & messages.
-
-Owns the collections' shape and indexes:
-- conversations: one per unique (sellerId, buyerId) pair (unique index)
-- messages: sequenceNumber ordering, cursor-paginated by _id
-"""
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -37,12 +30,10 @@ async def get_drafts_collection():
 
 
 async def ensure_chat_indexes() -> None:
-    """Create required indexes idempotently."""
     convos = await get_conversations_collection()
     messages = await get_messages_collection()
     drafts = await get_drafts_collection()
 
-    # One conversation per unique (sellerId, buyerId) pair — never duplicate
     await convos.create_index(
         [("sellerId", ASCENDING), ("buyerId", ASCENDING)],
         unique=True,
@@ -51,7 +42,6 @@ async def ensure_chat_indexes() -> None:
     await convos.create_index([("sellerId", ASCENDING), ("lastMessageAt", DESCENDING)])
     await convos.create_index([("buyerId", ASCENDING), ("lastMessageAt", DESCENDING)])
 
-    # Messages: pagination + ordering indexes
     await messages.create_index(
         [("conversationId", ASCENDING), ("createdAt", ASCENDING)],
         name="ix_messages_conversation_created",

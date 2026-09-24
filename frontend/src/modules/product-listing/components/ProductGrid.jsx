@@ -1,7 +1,4 @@
-/**
- * ProductGrid — grid of product cards for Tab 1: My Products.
- * MD3 theme: tonal elevation, rounded-xl cards, Material icons, Inter font.
- */
+
 import { useState } from 'react';
 import ProductDetailModal from './ProductDetailModal';
 import AddProductForm from './AddProductForm';
@@ -50,7 +47,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
 
   return (
     <div>
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-4">
         <div>
           <h2 className="text-headline-lg text-on-surface" style={{ fontWeight: 600 }}>Products</h2>
@@ -67,7 +63,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
         </div>
       </div>
 
-      {/* Empty state — no products at all */}
       {products.length === 0 && (
         <div className="text-center py-16 bg-surface-container-lowest border border-outline-variant rounded-xl">
           <span className="material-symbols-outlined text-[48px] text-outline opacity-50">inventory_2</span>
@@ -83,7 +78,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
         </div>
       )}
 
-      {/* Search + Filters */}
       {products.length > 0 && (
         <div className="mb-4">
           <div className="relative w-full">
@@ -105,7 +99,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
             )}
           </div>
 
-          {/* Stock filter chips */}
           <div className="flex gap-2 mt-3 overflow-x-auto hide-scrollbar pb-1">
             {[
               { key: 'all', label: 'All', icon: 'inventory_2' },
@@ -130,7 +123,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
         </div>
       )}
 
-      {/* No results from filter */}
       {products.length > 0 && filtered.length === 0 && (
         <div className="text-center py-12 bg-surface-container-lowest rounded-xl border border-outline-variant">
           <span className="material-symbols-outlined text-[40px] text-outline opacity-50">search_off</span>
@@ -139,7 +131,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
         </div>
       )}
 
-      {/* Product grid */}
       {filtered.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((product) => {
@@ -153,7 +144,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
                 onClick={() => setSelectedProduct(product)}
                 className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden text-left hover-ambient active-scale flex flex-col cursor-pointer group"
               >
-                {/* Image */}
                 <div className="h-48 w-full relative overflow-hidden bg-gradient-to-br from-primary-container/10 to-tertiary-container/10 flex items-center justify-center">
                   {product.image ? (
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -169,7 +159,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
                   </div>
                 </div>
 
-                {/* Info */}
                 <div className="p-4 flex flex-col flex-grow">
                   <h3 className="text-headline-md text-on-surface truncate mb-1" style={{ fontWeight: 600 }}>{product.name}</h3>
                   <p className="text-body-md text-on-surface-variant line-clamp-2 text-sm mb-3 flex-grow">{product.description || 'No description'}</p>
@@ -197,7 +186,6 @@ export default function ProductGrid({ products, sellerId, onUpdate, onToast }) {
         </div>
       )}
 
-      {/* Detail modal */}
       {selectedProduct && (
         <ProductDetailModal
           product={selectedProduct}

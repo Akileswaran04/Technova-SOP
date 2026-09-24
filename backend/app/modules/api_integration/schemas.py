@@ -1,11 +1,9 @@
-"""Pydantic schemas for the api_integration module."""
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 
 class IntegrationConnectResponse(BaseModel):
-    """Response to a connect request — the OAuth authorization URL to open."""
     service: str
     auth_url: str
     state: str
@@ -13,7 +11,6 @@ class IntegrationConnectResponse(BaseModel):
 
 
 class IntegrationStatus(BaseModel):
-    """Status of one connected (or connectable) service."""
     service: str
     connected: bool
     provider_account: Optional[str] = None
@@ -26,7 +23,6 @@ class IntegrationListResponse(BaseModel):
 
 
 class SyncResponse(BaseModel):
-    """Result of a manual sync of the external inbox into the unified inbox."""
     service: str
     created: int
     source: str

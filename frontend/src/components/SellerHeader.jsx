@@ -1,7 +1,4 @@
-/**
- * SellerHeader — sticky top header showing store identity and logout.
- * Avatar is clickable to upload a new image.
- */
+
 import { useRef } from 'react';
 import { updateSeller } from '../services/storage';
 

@@ -1,6 +1,3 @@
-"""
-Seller Profile Router — HTTP endpoints only.
-"""
 
 from typing import List
 
@@ -22,7 +19,6 @@ async def get_profile(
     user_id: str = Depends(get_current_user_id),
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
-    """Get current user's seller profile."""
     
     profile = await service.get_profile(int(user_id))
     return profile
@@ -34,7 +30,6 @@ async def create_profile(
     user_id: str = Depends(get_current_user_id),
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
-    """Create a new seller profile."""
     
     profile = await service.create_profile(int(user_id), data)
     return profile
@@ -46,7 +41,6 @@ async def update_profile(
     user_id: str = Depends(get_current_user_id),
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
-    """Update seller profile."""
     
     profile = await service.update_profile(int(user_id), data)
     return profile
@@ -57,7 +51,6 @@ async def submit_profile(
     user_id: str = Depends(get_current_user_id),
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
-    """Submit profile for verification review."""
     
     profile = await service.submit_for_review(int(user_id))
     return ProfileSubmitResponse(profile=profile)
@@ -70,7 +63,6 @@ async def update_status(
     user_id: str = Depends(get_current_user_id),
     service: SellerProfileService = Depends(get_seller_profile_service),
 ):
-    """Update verification status (admin action)."""
     
     target_id = int(profile_id) if profile_id else int(user_id)
     profile = await service.update_status(target_id, data)

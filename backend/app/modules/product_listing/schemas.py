@@ -1,4 +1,3 @@
-"""Pydantic schemas for product listing module."""
 from datetime import datetime
 from typing import Optional, List
 
@@ -6,17 +5,13 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
-# ── Review Schemas ──
-
 class ReviewCreate(BaseModel):
-    """Create a product review."""
     customer_name: str = Field(..., min_length=1, max_length=255)
     rating: int = Field(..., ge=1, le=5)
     comment: Optional[str] = None
 
 
 class ReviewResponse(BaseModel):
-    """Product review response."""
     id: int
     product_id: int
     customer_name: str
@@ -30,14 +25,10 @@ class ReviewResponse(BaseModel):
 
 
 class ReviewReply(BaseModel):
-    """Seller reply to a review."""
     seller_reply: str = Field(..., min_length=1)
 
 
-# ── Product Schemas ──
-
 class ProductCreate(BaseModel):
-    """Create a new product."""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     category: str = Field("general", min_length=1, max_length=100)
@@ -48,7 +39,6 @@ class ProductCreate(BaseModel):
 
 
 class ProductUpdate(BaseModel):
-    """Update an existing product."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     category: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -60,7 +50,6 @@ class ProductUpdate(BaseModel):
 
 
 class ProductResponse(BaseModel):
-    """Product response with reviews."""
     id: int
     seller_id: int
     name: str
@@ -78,11 +67,6 @@ class ProductResponse(BaseModel):
 
 
 class ProductListResponse(BaseModel):
-    """Paginated product list (offset-based).
-
-    has_more signals another page exists — computed from a limit+1 fetch so
-    no separate COUNT query is needed.
-    """
     items: List[ProductResponse]
     has_more: bool
     limit: int
@@ -90,11 +74,9 @@ class ProductListResponse(BaseModel):
 
 
 class StockUpdate(BaseModel):
-    """Adjust stock quantity."""
     delta: int = Field(..., description="Amount to add (positive) or subtract (negative)")
 
 
 class LikeResponse(BaseModel):
-    """Like toggle response."""
     likes: int
     liked: bool

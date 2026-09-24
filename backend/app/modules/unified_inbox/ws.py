@@ -1,15 +1,3 @@
-"""
-WebSocket chat endpoint — /ws/chat.
-
-Flow (spec §7):
-  Client → WS → authenticate (token, never trust client ids)
-        → validate conversation membership → generate messageId + sequenceNumber
-        → persist to MongoDB → publish via Redis pub/sub → deliver to recipient
-        → update Redis unread counter → ack to sender
-
-Reconnection: client sends `last_received_sequence` on join; the server returns
-only the gap, not full history.
-"""
 import asyncio
 import json
 import logging
@@ -33,17 +21,14 @@ router = APIRouter()
 
 
 def _dumps(payload: dict) -> str:
-    """Serialize WS frames — datetimes in message payloads -> ISO strings."""
     return json.dumps(payload, default=str)
 
 
 class ConnectionManager:
-    """In-memory WS registry + per-connection Redis subscriber."""
-
     def __init__(self):
         self.connections: dict[str, WebSocket] = {}
         self.user_connections: dict[int, set[str]] = {}
-        self.conversation_channels: dict[str, set[str]] = {}  # channel -> connection ids
+        self.conversation_channels: dict[str, set[str]] = {}
 
     async def connect(self, connection_id: str, user_id: int, ws: WebSocket) -> None:
         await ws.accept()
@@ -58,7 +43,6 @@ class ConnectionManager:
         if not conns:
             self.user_connections.pop(user_id, None)
             await RealtimeService.set_offline(user_id)
-        # Remove from channels
         for channel, members in list(self.conversation_channels.items()):
             members.discard(connection_id)
             if not members:
@@ -82,7 +66,6 @@ class ConnectionManager:
                 await ws.send_text(message)
             except Exception:
                 dead.append(ws)
-        # Remove dead sockets (will also be cleaned on disconnect events)
         for ws in dead:
             cid = next((k for k, v in self.connections.items() if v is ws), None)
             if cid:
@@ -91,16 +74,11 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# ── Process-global Redis → WS forwarder (started once in main.py) ──
 
 _forwarder_task: Optional[asyncio.Task] = None
 
 
 async def _global_pubsub_forwarder():
-    """Forward Redis pub/sub chat events to connected sockets.
-
-    A single shared subscriber keeps one connection per server process.
-    """
     from app.infrastructure.redis import RedisClient
 
     client = await RedisClient.get_client()
@@ -126,7 +104,6 @@ async def _global_pubsub_forwarder():
 
 
 def start_realtime_forwarder() -> asyncio.Task:
-    """Start the global pub/sub forwarder (idempotent)."""
     global _forwarder_task
     if _forwarder_task is None or _forwarder_task.done():
         _forwarder_task = asyncio.create_task(_global_pubsub_forwarder())
@@ -134,7 +111,6 @@ def start_realtime_forwarder() -> asyncio.Task:
 
 
 def stop_realtime_forwarder() -> None:
-    """Cancel the global forwarder."""
     global _forwarder_task
     if _forwarder_task is not None and not _forwarder_task.done():
         _forwarder_task.cancel()
@@ -142,7 +118,6 @@ def stop_realtime_forwarder() -> None:
 
 
 async def _resolve_user(token: str):
-    """Authenticate the WS — derive user from the token, never the client."""
     payload = decode_access_token(token)
     if not payload or not payload.get("sub"):
         return None
@@ -155,7 +130,6 @@ async def _resolve_user(token: str):
 
 
 async def _join(ws: WebSocket, connection_id: str, user, payload: dict, db) -> None:
-    """Validate membership, subscribe, and return the reconnection gap."""
     conversation_id = payload.get("conversation_id")
     if not conversation_id:
         await ws.send_text(_dumps({"event": "error", "detail": "conversation_id required"}))
@@ -176,7 +150,6 @@ async def _join(ws: WebSocket, connection_id: str, user, payload: dict, db) -> N
     await manager.subscribe(connection_id, channel)
     await RealtimeService.set_online(user.id, connection_id)
 
-    # Reconnection sync — only the gap after last_received_sequence
     last_seq = payload.get("last_received_sequence")
     if last_seq is not None:
         try:
@@ -194,7 +167,6 @@ async def _join(ws: WebSocket, connection_id: str, user, payload: dict, db) -> N
 
 @router.websocket("/ws/chat")
 async def chat_websocket(ws: WebSocket, token: str = ""):
-    """Authenticated realtime chat socket."""
     user = await _resolve_user(token)
     if user is None:
         await ws.close(code=4401)

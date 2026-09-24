@@ -1,4 +1,3 @@
-"""Unified Inbox module dependencies."""
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,5 +8,4 @@ from app.modules.unified_inbox.service import InboxService
 async def get_inbox_service(
     db: AsyncSession = Depends(get_db),
 ) -> InboxService:
-    """Provide InboxService with database session."""
     return InboxService(db)

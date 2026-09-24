@@ -1,4 +1,3 @@
-"""Product Listing Service — business logic layer."""
 
 
 from sqlalchemy import select, func
@@ -15,14 +14,11 @@ from app.core.exceptions import NotFoundException, ValidationException, Forbidde
 
 
 class ProductService:
-    """Business logic for product management."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
         self.product_repo = ProductRepository(db)
 
     async def _get_seller_id_from_user(self, user_id: int) -> int:
-        """Resolve seller_profile ID from user ID."""
         result = await self.db.execute(
             select(SellerProfile).where(SellerProfile.user_id == user_id)
         )
@@ -38,7 +34,6 @@ class ProductService:
         return product
 
     async def _assert_owns_product(self, user_id: int, product) -> None:
-        """RBAC — only the owning seller may mutate a product."""
         seller_id = await self._get_seller_id_from_user(user_id)
         if product.seller_id != seller_id:
             raise ForbiddenException("You do not own this product")
@@ -55,12 +50,6 @@ class ProductService:
         return await self._get_product_or_404(product_id)
 
     async def get_products_by_seller(self, user_id: int, limit: int = 100, offset: int = 0) -> dict:
-        """List the seller's products, offset-paginated.
-
-        Returns {items, has_more, limit, offset} so the frontend can page
-        through large catalogs instead of receiving every product in one
-        response — one query per page, no COUNT round trip.
-        """
         seller_id = await self._get_seller_id_from_user(user_id)
         items, has_more = await self.product_repo.get_by_seller(
             seller_id, limit=limit, offset=offset
@@ -73,7 +62,6 @@ class ProductService:
         }
 
     async def get_public_seller_products(self, seller_id: int, limit: int = 100, offset: int = 0) -> list:
-        """Public product list for a seller (used by buyer discovery)."""
         result = await self.db.execute(
             select(Product)
             .where(Product.seller_id == seller_id)
@@ -89,7 +77,7 @@ class ProductService:
 
         update_data = data.model_dump(exclude_unset=True)
         if "likes" in update_data:
-            update_data.pop("likes")  # likes only via toggle_like
+            update_data.pop("likes")
         updated = await self.product_repo.update(product_id, update_data)
         return updated
 
@@ -115,10 +103,8 @@ class ProductService:
         await self.product_repo.update(product_id, {"likes": new_likes})
         return {"likes": new_likes, "liked": True}
 
-    # ── Reviews ──
 
     async def add_review(self, user_id: int, product_id: int, data: ReviewCreate) -> dict:
-        """Leave a review on a product (buyer role)."""
         product = await self._get_product_or_404(product_id)
 
         buyer_result = await self.db.execute(
@@ -128,7 +114,6 @@ class ProductService:
         if not buyer:
             raise ForbiddenException("Only buyers can leave reviews")
 
-        # Verified purchase: does this buyer have an order containing this product?
         order_item_result = await self.db.execute(
             select(OrderItem.id)
             .join(OrderItem.order)

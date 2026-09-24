@@ -1,8 +1,4 @@
-/**
- * ProductDetailModal — full product detail view with MD3 theme.
- * Editable product info, reviews with seller reply, likes, delete.
- * All operations go through backend API.
- */
+
 import { useState, useRef } from 'react';
 import { updateProduct, deleteProduct } from '../../../services/storage';
 import ReviewList from './ReviewList';
@@ -144,7 +140,7 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
   };
 
   const handleReply = (reviewId, replyText) => {
-    // TODO: Add reply_to_review API endpoint
+
     onToast('Reply posted!');
   };
 
@@ -162,7 +158,6 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
       <div className="absolute inset-0 bg-inverse-surface/40" onClick={handleClose} />
 
       <div className="relative bg-surface-container-lowest rounded-t-2xl sm:rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scroll shadow-lg">
-        {/* Header */}
         <div className="sticky top-0 bg-surface-container-lowest border-b border-outline-variant px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-headline-md text-on-surface truncate" style={{ fontWeight: 600 }}>
             {editing ? 'Edit Product' : product.name}
@@ -177,7 +172,6 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
             <div className="bg-error-container text-on-error-container px-4 py-3 rounded-lg text-sm font-medium">{error}</div>
           )}
 
-          {/* Image */}
           <div className="aspect-video bg-gradient-to-br from-primary-container/10 to-tertiary-container/10 rounded-xl overflow-hidden flex items-center justify-center">
             {editing ? (
               <button type="button" onClick={() => fileInputRef.current?.click()}
@@ -314,7 +308,6 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
             </div>
           )}
 
-          {/* Reviews */}
           <div className="border-t border-outline-variant pt-5">
             <h3 className="text-headline-md text-on-surface mb-3" style={{ fontWeight: 600 }}>
               Customer Reviews ({product.reviews?.length || 0})
@@ -323,7 +316,6 @@ export default function ProductDetailModal({ product, onClose, onUpdate, onToast
           </div>
         </div>
 
-        {/* Unsaved changes confirmation */}
         {confirmClose && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-inverse-surface/40">
             <div className="bg-surface-container-lowest rounded-xl shadow-lg p-6 mx-4 max-w-sm w-full space-y-4">

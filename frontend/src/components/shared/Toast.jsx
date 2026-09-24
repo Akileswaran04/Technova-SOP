@@ -1,8 +1,4 @@
-/**
- * Toast notification component — non-intrusive feedback for save/success actions.
- * Shows at bottom-center on mobile, top-right on desktop.
- * Auto-dismisses after 3 seconds.
- */
+
 import { useEffect, useState } from 'react';
 
 export default function Toast({ message, type = 'success', onDismiss }) {

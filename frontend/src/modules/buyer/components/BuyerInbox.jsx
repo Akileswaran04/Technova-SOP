@@ -1,7 +1,4 @@
-/**
- * BuyerInbox — buyer's own inbox over the same Mongo conversations/messages
- * collections (filtered by buyerId), with live WebSocket delivery.
- */
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getConversations, getConversationById, sendMessage, markAsRead } from '../../../services/storage';
 import useChatSocket from '../../../hooks/useChatSocket';
@@ -40,12 +37,10 @@ export default function BuyerInbox({ buyerId, onToast }) {
     if (data.unreadCount > 0) await markAsRead(id);
   }, []);
 
-  // Initial load
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
 
-  // Load thread when a conversation is selected + join via WS
   useEffect(() => {
     if (!selectedId) return;
     loadThread(selectedId);
@@ -53,7 +48,6 @@ export default function BuyerInbox({ buyerId, onToast }) {
     return () => ws.leave(selectedId);
   }, [selectedId, ws]);
 
-  // Live messages: prepend gap sync, append new messages
   useEffect(() => {
     const offSync = ws.on('sync', (frame) => {
       if (frame.conversation_id !== selectedId) return;
@@ -104,7 +98,6 @@ export default function BuyerInbox({ buyerId, onToast }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-0 bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
-      {/* Conversation list */}
       <div className={`${selectedId ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-96 border-r border-outline-variant`}>
         <div className="px-4 py-3 border-b border-outline-variant">
           <h2 className="text-headline-md text-on-surface font-semibold">My Inbox</h2>
@@ -143,7 +136,6 @@ export default function BuyerInbox({ buyerId, onToast }) {
         </div>
       </div>
 
-      {/* Chat thread */}
       <div className={`${selectedId ? 'flex' : 'hidden lg:flex'} flex-col flex-1 min-w-0`}>
         {selectedId ? (
           <>
@@ -162,20 +154,7 @@ export default function BuyerInbox({ buyerId, onToast }) {
 
             <div className="flex-1 overflow-y-auto px-4 py-4 bg-background/50 space-y-1">
               {(convo?.messages || []).map((m, i) => (
-                <div key={m.id || i} className={`flex ${m.senderType === 'buyer' ? 'justify-end' : 'justify-start'} mb-1`}>
-                  <div className="max-w-[75%]">
-                    <div className={`px-3.5 py-2.5 text-body-md leading-relaxed rounded-2xl ${
-                      m.senderType === 'buyer'
-                        ? 'bg-primary text-on-primary rounded-br-md'
-                        : 'bg-surface-container-low text-on-surface border border-outline-variant/50 rounded-bl-md'
-                    }`}>
-                      {m.text}
-                    </div>
-                    <p className={`text-label-sm text-on-surface-variant mt-0.5 ${m.senderType === 'buyer' ? 'text-right' : 'text-left'}`}>
-                      {new Date(m.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </div>
+                <BuyerMessageBubble key={m.id || i} message={m} />
               ))}
               <div ref={messagesEndRef} />
             </div>
@@ -209,6 +188,38 @@ export default function BuyerInbox({ buyerId, onToast }) {
   );
 }
 
+function BuyerMessageBubble({ message: m }) {
+  const [showTranslation, setShowTranslation] = useState(false);
+  const hasTranslation = !!m.translatedText;
+  const isBuyer = m.senderType === 'buyer';
+
+  return (
+    <div className={`flex ${isBuyer ? 'justify-end' : 'justify-start'} mb-1`}>
+      <div className="max-w-[75%]">
+        <div className={`px-3.5 py-2.5 text-body-md leading-relaxed rounded-2xl ${
+          isBuyer
+            ? 'bg-primary text-on-primary rounded-br-md'
+            : 'bg-surface-container-low text-on-surface border border-outline-variant/50 rounded-bl-md'
+        }`}>
+          {showTranslation && hasTranslation ? m.translatedText : m.text}
+        </div>
+        {hasTranslation && (
+          <button
+            onClick={() => setShowTranslation(!showTranslation)}
+            className={`inline-flex items-center gap-0.5 text-label-sm text-primary mt-0.5 ${isBuyer ? 'float-right' : ''}`}
+          >
+            <span className="material-symbols-outlined text-[12px]">translate</span>
+            {showTranslation ? 'Show original' : `See translation (${m.translatedLanguage})`}
+          </button>
+        )}
+        <p className={`text-label-sm text-on-surface-variant mt-0.5 ${isBuyer ? 'text-right' : 'text-left'}`}>
+          {new Date(m.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function mapMsg(m) {
   return {
     id: m.id,
@@ -217,5 +228,7 @@ function mapMsg(m) {
     timestamp: m.created_at,
     sequenceNumber: m.sequence_number,
     sentiment: m.sentiment,
+    translatedText: m.translated_content,
+    translatedLanguage: m.translated_language,
   };
 }

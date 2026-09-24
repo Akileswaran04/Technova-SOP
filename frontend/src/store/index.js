@@ -1,9 +1,4 @@
-/**
- * Simple state management store.
- *
- * Currently wraps localStorage. Replace with Zustand/Redux
- * when the app grows complex enough to need it.
- */
+
 
 const STORE_PREFIX = 'technova_';
 

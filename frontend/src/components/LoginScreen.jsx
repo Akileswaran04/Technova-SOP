@@ -1,20 +1,18 @@
-/**
- * Login / Signup screen — API-backed auth with JWT tokens.
- * Role (Seller/Buyer) is picked once, at registration — single identity,
- * single login, no toggle afterwards.
- */
+
 import { useState } from 'react';
 import { registerUser, loginUser, demoLogin } from '../services/storage';
 
 const DEMO_ACCOUNTS = [
-  { key: 'seller1', label: 'Seller 1', sub: 'Rajesh Handicrafts', icon: 'storefront', role: 'seller' },
-  { key: 'seller2', label: 'Seller 2', sub: 'Meena Organics', icon: 'storefront', role: 'seller' },
-  { key: 'buyer1', label: 'Buyer 1', sub: 'Arjun Mehta', icon: 'shopping_bag', role: 'buyer' },
-  { key: 'buyer2', label: 'Buyer 2', sub: 'Sana Khan', icon: 'shopping_bag', role: 'buyer' },
+  { key: 'seller1', label: 'Seller 1', sub: 'Murugan Silks', icon: 'storefront', role: 'seller' },
+  { key: 'seller2', label: 'Seller 2', sub: 'Lakshmi Filter Coffee', icon: 'storefront', role: 'seller' },
+  { key: 'seller3', label: 'Seller 3', sub: 'Karthik Handicrafts', icon: 'storefront', role: 'seller' },
+  { key: 'buyer1', label: 'Buyer 1', sub: 'Priya Sundaram', icon: 'shopping_bag', role: 'buyer' },
+  { key: 'buyer2', label: 'Buyer 2', sub: 'Arun Kumar', icon: 'shopping_bag', role: 'buyer' },
+  { key: 'buyer3', label: 'Buyer 3', sub: 'Divya Balasubramanian', icon: 'shopping_bag', role: 'buyer' },
 ];
 
 export default function LoginScreen({ onLogin }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [mode, setMode] = useState('login');
   const [role, setRole] = useState('seller');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -67,11 +65,11 @@ export default function LoginScreen({ onLogin }) {
           role,
           full_name: fullName.trim(),
           phone: identifier.includes('@') ? null : identifier.trim(),
-          // Seller fields
+
           business_name: role === 'seller' ? businessName.trim() : undefined,
           business_type: 'retail',
           license_number: role === 'seller' ? licenseNumber.trim() : undefined,
-          // Buyer fields
+
           first_name: role === 'buyer' ? fullName.trim().split(' ')[0] : undefined,
           last_name: role === 'buyer' ? (fullName.trim().split(' ').slice(1).join(' ') || 'User') : undefined,
           city: role === 'buyer' ? city.trim() : undefined,
@@ -120,7 +118,6 @@ export default function LoginScreen({ onLogin }) {
 
           {mode === 'signup' && (
             <>
-              {/* Role picker — shown once, at registration */}
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { key: 'seller', icon: 'storefront', label: 'Seller' },

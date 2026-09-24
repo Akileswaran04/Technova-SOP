@@ -1,4 +1,3 @@
-"""AI Communication Router — HTTP endpoints only."""
 from typing import List
 
 
@@ -18,7 +17,6 @@ router = APIRouter()
 
 @router.post("/analyze", response_model=SentimentResponse)
 async def analyze(data: SentimentRequest):
-    """Run sentiment/intent analysis on a message (in-app or synced email alike)."""
     return await analyze_message(data.content)
 
 
@@ -28,7 +26,6 @@ async def list_interactions(
     user_id: str = Depends(get_current_user_id),
     service: AICommunicationService = Depends(get_ai_communication_service),
 ):
-    """List recent AI interactions for the current seller."""
     return await service.get_interactions(int(user_id), limit)
 
 
@@ -38,7 +35,6 @@ async def log_interaction(
     user_id: str = Depends(get_current_user_id),
     service: AICommunicationService = Depends(get_ai_communication_service),
 ):
-    """Log an AI interaction."""
     return await service.log_interaction(int(user_id), data)
 
 
@@ -47,5 +43,4 @@ async def get_stats(
     user_id: str = Depends(get_current_user_id),
     service: AICommunicationService = Depends(get_ai_communication_service),
 ):
-    """Get AI communication statistics."""
     return await service.get_stats(int(user_id))

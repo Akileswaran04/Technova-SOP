@@ -1,4 +1,3 @@
-"""Core dependency injection for FastAPI."""
 
 from typing import AsyncGenerator, Optional, Sequence
 
@@ -14,7 +13,6 @@ from app.modules.seller_profile.models import User
 async def get_current_user_id(
     authorization: str = Header(None),
 ) -> str:
-    """Extract and validate user ID from JWT token."""
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -44,7 +42,6 @@ async def get_current_user_id(
 
 
 def _extract_token(authorization: Optional[str]) -> Optional[dict]:
-    """Decode a bearer token from an Authorization header."""
     if not authorization:
         return None
     token = authorization.replace("Bearer ", "")
@@ -54,7 +51,6 @@ def _extract_token(authorization: Optional[str]) -> Optional[dict]:
 def get_token_payload(
     authorization: str = Header(None),
 ) -> dict:
-    """Return the decoded JWT payload (sub + role claims)."""
     payload = _extract_token(authorization)
     if payload is None or payload.get("sub") is None:
         raise HTTPException(
@@ -66,7 +62,6 @@ def get_token_payload(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Get async database session."""
     async for session in get_db_session():
         yield session
 
@@ -75,10 +70,6 @@ async def get_current_user(
     payload: dict = Depends(get_token_payload),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Load the full User row for the authenticated principal.
-
-    Server-side RBAC source of truth — never trust client-supplied ids.
-    """
     result = await db.execute(
         select(User).where(User.id == int(payload["sub"]))
     )
@@ -93,7 +84,6 @@ async def get_current_user(
 
 
 def require_roles(*roles: str):
-    """Dependency factory: restrict an endpoint to specific roles."""
     async def _role_checker(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             raise HTTPException(
@@ -105,6 +95,5 @@ def require_roles(*roles: str):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Get async database session."""
     async for session in get_db_session():
         yield session

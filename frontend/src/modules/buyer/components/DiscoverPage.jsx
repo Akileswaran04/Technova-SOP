@@ -1,14 +1,14 @@
-/**
- * DiscoverPage — buyer-facing search/filter of sellers & products
- * (category, location, budget) with trust-score badges.
- */
+
 import { useState, useEffect, useCallback } from 'react';
 import { discover } from '../../../services/storage';
+import CompareModal from './CompareModal';
 
 export default function DiscoverPage({ onOpenProduct }) {
   const [filters, setFilters] = useState({ category: '', budget: '', q: '' });
-  // Raw search-box text; debounced into filters.q so typing doesn't fire a
-  // backend request per keystroke
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showCompare, setShowCompare] = useState(false);
+
   const [searchInput, setSearchInput] = useState('');
 
   useEffect(() => {
@@ -72,7 +72,6 @@ export default function DiscoverPage({ onOpenProduct }) {
 
   return (
     <div className="space-y-4">
-      {/* Search + filters */}
       <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3">
         <div className="relative">
           <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
@@ -107,8 +106,18 @@ export default function DiscoverPage({ onOpenProduct }) {
             <span className="material-symbols-outlined text-[18px]">tune</span>
             Search
           </button>
+          <button
+            onClick={() => { setCompareMode(!compareMode); setSelectedIds([]); }}
+            className={`h-10 px-4 rounded-lg text-label-md flex items-center gap-2 border ${compareMode ? 'bg-primary-container/30 border-primary text-primary' : 'border-outline-variant text-on-surface-variant'}`}
+          >
+            <span className="material-symbols-outlined text-[18px]">compare_arrows</span>
+            Compare
+          </button>
         </div>
-        <p className="text-label-sm text-on-surface-variant">{total} result{total === 1 ? '' : 's'}</p>
+        <p className="text-label-sm text-on-surface-variant">
+          {total} result{total === 1 ? '' : 's'}
+          {compareMode && ` · select 2-3 to compare (${selectedIds.length} selected)`}
+        </p>
       </div>
 
       {error && <div className="bg-error-container text-on-error-container px-4 py-3 rounded-lg text-sm">{error}</div>}
@@ -119,32 +128,45 @@ export default function DiscoverPage({ onOpenProduct }) {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          {items.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => onOpenProduct(p)}
-              className="text-left bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden hover:shadow-md transition-shadow flex flex-col"
-            >
-              <div className="h-32 bg-surface-container flex items-center justify-center overflow-hidden">
-                {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="material-symbols-outlined text-[40px] text-on-surface-variant/40">inventory_2</span>
+          {items.map((p) => {
+            const selected = selectedIds.includes(p.id);
+            const toggleSelect = () => {
+              setSelectedIds((prev) =>
+                selected ? prev.filter((id) => id !== p.id) : prev.length < 3 ? [...prev, p.id] : prev
+              );
+            };
+            return (
+              <button
+                key={p.id}
+                onClick={() => (compareMode ? toggleSelect() : onOpenProduct(p))}
+                className={`relative text-left bg-surface-container-lowest rounded-xl border overflow-hidden hover:shadow-md transition-shadow flex flex-col ${selected ? 'border-primary ring-2 ring-primary/30' : 'border-outline-variant'}`}
+              >
+                {compareMode && (
+                  <span className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center ${selected ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest border border-outline-variant'}`}>
+                    {selected && <span className="material-symbols-outlined text-[14px]">check</span>}
+                  </span>
                 )}
-              </div>
-              <div className="p-3 flex flex-col gap-1 flex-1">
-                <p className="text-label-md text-on-surface font-semibold truncate">{p.name}</p>
-                <p className="text-title-lg text-primary font-bold">${p.price?.toLocaleString()}</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {trustBadge(p.trust_score)}
-                  {verifiedBadge(p.seller_verification_status)}
+                <div className="h-32 bg-surface-container flex items-center justify-center overflow-hidden">
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="material-symbols-outlined text-[40px] text-on-surface-variant/40">inventory_2</span>
+                  )}
                 </div>
-                <p className="text-label-sm text-on-surface-variant truncate">
-                  {p.seller_name}{p.seller_city ? ` · ${p.seller_city}` : ''}
-                </p>
-              </div>
-            </button>
-          ))}
+                <div className="p-3 flex flex-col gap-1 flex-1">
+                  <p className="text-label-md text-on-surface font-semibold truncate">{p.name}</p>
+                  <p className="text-title-lg text-primary font-bold">${p.price?.toLocaleString()}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {trustBadge(p.trust_score)}
+                    {verifiedBadge(p.seller_verification_status)}
+                  </div>
+                  <p className="text-label-sm text-on-surface-variant truncate">
+                    {p.seller_name}{p.seller_city ? ` · ${p.seller_city}` : ''}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -153,6 +175,20 @@ export default function DiscoverPage({ onOpenProduct }) {
           <span className="material-symbols-outlined text-[56px] opacity-30">search_off</span>
           <p className="text-body-md mt-3">No products match your filters. Try widening the search.</p>
         </div>
+      )}
+
+      {compareMode && selectedIds.length >= 2 && (
+        <button
+          onClick={() => setShowCompare(true)}
+          className="fixed bottom-24 sm:bottom-6 left-1/2 -translate-x-1/2 h-12 px-6 rounded-full bg-primary text-on-primary text-label-md font-medium shadow-lg flex items-center gap-2 z-30"
+        >
+          <span className="material-symbols-outlined text-[18px]">compare_arrows</span>
+          Compare {selectedIds.length}
+        </button>
+      )}
+
+      {showCompare && (
+        <CompareModal productIds={selectedIds} onClose={() => setShowCompare(false)} />
       )}
     </div>
   );

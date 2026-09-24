@@ -1,8 +1,3 @@
-"""Human Approval Service — AI drafts, seller review, approve-then-send.
-
-Never auto-sends AI-drafted content: a draft must be approved by the seller
-before it is sent as a message.
-"""
 from typing import Optional
 
 from sqlalchemy import select
@@ -20,8 +15,6 @@ from bson import ObjectId
 
 
 class HumanApprovalService:
-    """Business logic for human approval flow."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
         self.draft_repo = DraftRepository()
@@ -44,7 +37,6 @@ class HumanApprovalService:
     async def generate_draft(
         self, user_id: int, conversation_id: str, reply_to_message_id: Optional[str] = None
     ) -> dict:
-        """Analyze the latest message in the conversation and draft a reply."""
         seller_id = await self._get_seller_id_from_user(user_id)
 
         convo = await self.convo_repo.get_by_id(conversation_id)
@@ -112,7 +104,6 @@ class HumanApprovalService:
         return self._to_response(updated)
 
     async def send_draft(self, user_id: int, draft_id: str) -> dict:
-        """Approve + send the draft as a seller message (single seller action)."""
         draft = await self.draft_repo.get_by_id(draft_id)
         if not draft:
             raise NotFoundException("Draft", draft_id)

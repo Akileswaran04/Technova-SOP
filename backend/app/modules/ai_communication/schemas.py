@@ -1,4 +1,3 @@
-"""Pydantic schemas for AI communication module."""
 from datetime import datetime
 from typing import Optional, List
 
@@ -7,12 +6,10 @@ from pydantic import BaseModel, Field
 
 
 class SentimentRequest(BaseModel):
-    """Analyze a message's sentiment and intent."""
     content: str = Field(..., min_length=1, max_length=4000)
 
 
 class SentimentResponse(BaseModel):
-    """Sentiment/intent analysis result."""
     label: str
     score: float
     intent: str
@@ -22,7 +19,6 @@ class SentimentResponse(BaseModel):
 
 
 class AIInteractionCreate(BaseModel):
-    """Log an AI interaction."""
     conversation_id: Optional[int] = None
     message_text: str = Field(..., min_length=1)
     emotion: Optional[str] = None
@@ -34,7 +30,6 @@ class AIInteractionCreate(BaseModel):
 
 
 class AIInteractionResponse(BaseModel):
-    """AI interaction response."""
     id: int
     conversation_id: Optional[int]
     seller_id: int
@@ -52,7 +47,6 @@ class AIInteractionResponse(BaseModel):
 
 
 class AIStatsResponse(BaseModel):
-    """AI communication statistics."""
     total_interactions: int
     total_sent: int
     total_edited: int

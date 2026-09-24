@@ -1,9 +1,4 @@
-/**
- * Sidebar — dual-mode navigation.
- * Desktop (lg+): always-visible fixed sidebar, 256px wide
- * Tablet (md): overlay drawer toggled by hamburger
- * Mobile (<md): hidden entirely, bottom nav takes over
- */
+
 import { useRef, useState, useEffect } from 'react';
 import { updateSeller } from '../services/storage';
 import { getNavTabs } from '../modules/MODULES';
@@ -18,7 +13,6 @@ function SidebarContent({ seller, activeTab, onTabChange, onLogout, onClose, fil
 
   return (
     <>
-      {/* Store Profile */}
       <div className="px-4 mb-8 flex flex-col items-center">
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -42,7 +36,6 @@ function SidebarContent({ seller, activeTab, onTabChange, onLogout, onClose, fil
         )}
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 flex flex-col gap-1 px-3">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -72,7 +65,6 @@ function SidebarContent({ seller, activeTab, onTabChange, onLogout, onClose, fil
         })}
       </nav>
 
-      {/* Logout */}
       <div className="px-3 mt-auto">
         <div className="border-t border-outline-variant pt-3">
           <button
@@ -111,12 +103,10 @@ export default function Sidebar({ seller, activeTab, onTabChange, onSellerUpdate
 
   return (
     <>
-      {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 h-screen sticky top-0 flex-col py-6 bg-surface-container-low border-r border-outline-variant flex-shrink-0">
         <SidebarContent {...sharedProps} />
       </aside>
 
-      {/* Tablet drawer */}
       {isOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-inverse-surface/40" onClick={onClose} />

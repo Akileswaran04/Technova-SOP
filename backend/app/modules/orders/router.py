@@ -1,5 +1,4 @@
-"""Orders Router — HTTP endpoints only."""
-from typing import Optional
+from typing import List, Optional
 
 
 from fastapi import APIRouter, Depends, Query, status
@@ -7,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.core.dependencies import get_current_user
 from app.modules.orders.dependencies import get_order_service
 from app.modules.orders.schemas import (
-    OrderCreate, OrderResponse, OrderStatusUpdate, OrderReviewCreate,
+    OrderCreate, OrderResponse, OrderStatusUpdate, OrderReviewCreate, TrackingEventResponse,
 )
 from app.modules.orders.service import OrderService
 
@@ -20,7 +19,6 @@ async def create_order(
     user=Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ):
-    """Place an order (ACID: stock decrement + mock payment + transaction)."""
     return await service.create_order(user.id, data)
 
 
@@ -31,7 +29,6 @@ async def list_orders(
     user=Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ):
-    """List orders for the current buyer or seller (cursor-paginated)."""
     return await service.list_orders(user.id, user.role, cursor=cursor, limit=limit)
 
 
@@ -41,7 +38,6 @@ async def get_order(
     user=Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ):
-    """Get an order (participant only)."""
     return await service.get_order(user.id, user.role, order_id)
 
 
@@ -52,8 +48,16 @@ async def update_order_status(
     user=Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ):
-    """Seller updates order status (state machine, never free-text)."""
     return await service.update_status(user.id, order_id, data)
+
+
+@router.get("/{order_id}/tracking", response_model=List[TrackingEventResponse])
+async def get_order_tracking(
+    order_id: int,
+    user=Depends(get_current_user),
+    service: OrderService = Depends(get_order_service),
+):
+    return await service.get_tracking(user.id, user.role, order_id)
 
 
 @router.post("/{order_id}/review")
@@ -63,5 +67,4 @@ async def add_order_review(
     user=Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ):
-    """Buyer leaves a review after an order — feeds trust_scores."""
     return await service.add_review(user.id, order_id, data)

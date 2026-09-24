@@ -1,6 +1,3 @@
-"""
-Seller Profile module dependencies.
-"""
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,5 +9,4 @@ from app.modules.seller_profile.service import SellerProfileService
 async def get_seller_profile_service(
     db: AsyncSession = Depends(get_db),
 ) -> SellerProfileService:
-    """Provide SellerProfileService with database session."""
     return SellerProfileService(db)

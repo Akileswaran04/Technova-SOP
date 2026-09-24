@@ -1,4 +1,3 @@
-"""Redis cache client initialization and connection management."""
 import json
 import logging
 import time
@@ -12,8 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class RedisSettings(BaseSettings):
-    """Redis configuration."""
-
     model_config = ConfigDict(env_prefix="redis_", case_sensitive=False)
 
     url: str = "redis://localhost:6379/0"
@@ -26,17 +23,12 @@ redis_settings = RedisSettings()
 
 
 class RedisClient:
-    """Redis async client wrapper."""
-
     client: Optional[Redis] = None
-    # Backoff so a dead Redis isn't re-connected on every single request
-    # (each failed connect attempt costs seconds on a hosted instance).
     _last_connect_attempt: float = 0.0
-    _CONNECT_RETRY_INTERVAL = 60  # seconds
+    _CONNECT_RETRY_INTERVAL = 60
 
     @classmethod
     async def connect_to_redis(cls) -> None:
-        """Create connection to Redis."""
         cls._last_connect_attempt = time.monotonic()
         try:
             logger.info(f"Connecting to Redis at {redis_settings.host}:{redis_settings.port}...")
@@ -45,29 +37,23 @@ class RedisClient:
                 encoding="utf8",
                 decode_responses=True,
                 health_check_interval=30,
-                # Bounded timeouts: a dead/unreachable hosted Redis must fail
-                # fast instead of stalling every request for many seconds.
                 socket_connect_timeout=3,
                 socket_timeout=3,
             )
-            # Verify connection
             await cls.client.ping()
             logger.info("Connected to Redis")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {str(e)}")
-            # Don't raise, continue without Redis (optional service)
             cls.client = None
 
     @classmethod
     async def close_connection(cls) -> None:
-        """Close Redis connection."""
         if cls.client is not None:
             await cls.client.close()
             logger.info("Redis connection closed")
 
     @classmethod
     async def get_client(cls) -> Optional[Redis]:
-        """Get Redis client instance."""
         if cls.client is None:
             if time.monotonic() - cls._last_connect_attempt < cls._CONNECT_RETRY_INTERVAL:
                 return None
@@ -78,7 +64,6 @@ class RedisClient:
     async def set_cache(
         cls, key: str, value: Any, ttl: int = 3600
     ) -> bool:
-        """Set cache value with TTL (in seconds)."""
         if cls.client is None:
             return False
         try:
@@ -92,7 +77,6 @@ class RedisClient:
 
     @classmethod
     async def get_cache(cls, key: str) -> Optional[Any]:
-        """Get cache value."""
         if cls.client is None:
             return None
         try:
@@ -109,7 +93,6 @@ class RedisClient:
 
     @classmethod
     async def delete_cache(cls, key: str) -> bool:
-        """Delete cache value."""
         if cls.client is None:
             return False
         try:
@@ -121,7 +104,6 @@ class RedisClient:
 
     @classmethod
     async def flush_all(cls) -> bool:
-        """Flush all cache."""
         if cls.client is None:
             return False
         try:
@@ -133,5 +115,4 @@ class RedisClient:
 
 
 async def get_redis() -> Optional[Redis]:
-    """Dependency for getting Redis client."""
     return await RedisClient.get_client()

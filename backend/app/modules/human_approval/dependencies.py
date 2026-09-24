@@ -1,4 +1,3 @@
-"""Human approval module dependencies."""
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,5 +8,4 @@ from app.modules.human_approval.service import HumanApprovalService
 async def get_human_approval_service(
     db: AsyncSession = Depends(get_db),
 ) -> HumanApprovalService:
-    """Provide HumanApprovalService with database session."""
     return HumanApprovalService(db)

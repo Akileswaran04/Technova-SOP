@@ -1,12 +1,7 @@
-"""Authentication Service — register, login, token management.
-
-Single identity, single login: role is chosen once at registration and
-carried in the JWT. Sellers get a SellerProfile, buyers a BuyerProfile.
-"""
 from typing import Optional
 
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -16,32 +11,28 @@ from app.modules.authentication.schemas import RegisterRequest, LoginRequest, De
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.exceptions import ConflictException, ValidationException, NotFoundException
 
-# Seeded by backend/seed_demo_users.py — same keys as the demo buttons.
 DEMO_ACCOUNT_EMAILS = {
     "seller1": "seller1@technova.local",
     "seller2": "seller2@technova.local",
+    "seller3": "seller3@technova.local",
     "buyer1": "buyer1@technova.local",
     "buyer2": "buyer2@technova.local",
+    "buyer3": "buyer3@technova.local",
     "admin": "admin@technova.local",
 }
 
 
 class AuthService:
-    """Business logic for authentication."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def register(self, data: RegisterRequest) -> dict:
-        """Register a new seller or buyer account."""
-        # Check if email already exists
         existing = await self.db.execute(
             select(User).where(User.email == data.email)
         )
         if existing.scalar_one_or_none():
             raise ConflictException("An account with this email already exists")
 
-        # Create user with role from registration
         user = User(
             email=data.email,
             password_hash=hash_password(data.password),
@@ -83,7 +74,6 @@ class AuthService:
             await self.db.refresh(profile)
             buyer_id = str(profile.id)
 
-        # Generate token with role claim
         token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
         return {
@@ -97,11 +87,6 @@ class AuthService:
         }
 
     async def demo_login(self, data: DemoLoginRequest) -> dict:
-        """One-click login for a seeded demo account (temporary login).
-
-        Demo-only convenience for the local build: the key maps to a fixed
-        demo email, and only accounts seeded by seed_demo_users.py qualify.
-        """
         email = DEMO_ACCOUNT_EMAILS.get(data.demo)
         if not email:
             raise ValidationException("Unknown demo account")
@@ -116,9 +101,6 @@ class AuthService:
         return await self._token_response(user)
 
     async def login(self, data: LoginRequest) -> dict:
-        """Login with email/phone and password."""
-        # Find user by email or phone — profiles eager-loaded so login is a
-        # single query instead of three sequential round trips
         result = await self.db.execute(
             select(User)
             .where(
@@ -134,7 +116,6 @@ class AuthService:
         if not verify_password(data.password, user.password_hash):
             raise ValidationException("Incorrect password")
 
-        # Resolve profile by role (already loaded with the user)
         seller_id = None
         buyer_id = None
         if user.role == "seller":
@@ -147,12 +128,6 @@ class AuthService:
         return await self._token_response(user, seller_id=seller_id, buyer_id=buyer_id)
 
     async def _token_response(self, user, seller_id=None, buyer_id=None) -> dict:
-        """Build the standard token response for a user.
-
-        Profiles are resolved from the eager-loaded relationships on `user`
-        (set up by the caller's joinedload — a single joined query instead of
-        a separate round trip per relationship) — no extra queries.
-        """
         if user.role == "seller" and seller_id is None:
             profile = user.seller_profile
             seller_id = str(profile.id) if profile else None
@@ -160,7 +135,6 @@ class AuthService:
             profile = user.buyer_profile
             buyer_id = str(profile.id) if profile else None
 
-        # Generate token with role claim
         token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
         return {
@@ -174,11 +148,6 @@ class AuthService:
         }
 
     async def get_current_user(self, user_id) -> Optional[User]:
-        """Get current user by ID, with role profile eager-loaded.
-
-        /auth/me needs both the user and their profile; loading them in one
-        query avoids a second full DB round trip on every dashboard load.
-        """
         result = await self.db.execute(
             select(User)
             .where(User.id == user_id)
@@ -186,15 +155,19 @@ class AuthService:
         )
         return result.scalar_one_or_none()
 
+    async def update_language(self, user_id: int, preferred_language: str) -> None:
+        await self.db.execute(
+            update(User).where(User.id == user_id).values(preferred_language=preferred_language)
+        )
+        await self.db.flush()
+
     async def get_seller_profile(self, user_id) -> Optional[SellerProfile]:
-        """Get seller profile for current user."""
         result = await self.db.execute(
             select(SellerProfile).where(SellerProfile.user_id == user_id)
         )
         return result.scalar_one_or_none()
 
     async def get_buyer_profile(self, user_id) -> Optional[BuyerProfile]:
-        """Get buyer profile for current user."""
         result = await self.db.execute(
             select(BuyerProfile).where(BuyerProfile.user_id == user_id)
         )

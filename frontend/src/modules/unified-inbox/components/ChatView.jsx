@@ -1,9 +1,4 @@
-/**
- * ChatView — right panel of the inbox with AI draft + human approval flow.
- * AI drafts come from the backend (ai_communication + human_approval modules);
- * a draft is NEVER auto-sent — the seller reviews/edits and approves it.
- * All data operations go through the backend API.
- */
+
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getConversationById, sendMessage, markAsRead, generateDraft, editDraft, sendDraft } from '../../../services/storage';
 import AIDraft from '../../ai-communication/components/AIDraft';
@@ -33,6 +28,9 @@ function shouldShowDateDivider(messages, index) {
 }
 
 function MessageBubble({ message, isSeller }) {
+  const [showTranslation, setShowTranslation] = useState(false);
+  const hasTranslation = !!message.translatedText;
+
   return (
     <div className={`flex ${isSeller ? 'justify-end' : 'justify-start'} mb-1`}>
       <div className="max-w-[75%] sm:max-w-[60%]">
@@ -44,8 +42,17 @@ function MessageBubble({ message, isSeller }) {
                 : 'bg-surface-container-low text-on-surface rounded-2xl rounded-bl-md border border-outline-variant/50'
             }`}
           >
-            {message.text}
+            {showTranslation && hasTranslation ? message.translatedText : message.text}
           </div>
+        )}
+        {hasTranslation && (
+          <button
+            onClick={() => setShowTranslation(!showTranslation)}
+            className={`inline-flex items-center gap-0.5 text-label-sm text-primary mt-0.5 ${isSeller ? 'float-right' : ''}`}
+          >
+            <span className="material-symbols-outlined text-[12px]">translate</span>
+            {showTranslation ? 'Show original' : `See translation (${message.translatedLanguage})`}
+          </button>
         )}
         {message.isAI && (
           <span className="inline-flex items-center gap-0.5 text-label-sm text-primary mt-0.5 ml-1">
@@ -61,7 +68,6 @@ function MessageBubble({ message, isSeller }) {
   );
 }
 
-// Map backend sentiment to the AIDraft UI's emotion/strategy config
 const emotionMap = { positive: 'Excited', negative: 'Frustrated', neutral: 'Neutral' };
 const strategyMap = {
   inform: 'Educational', empathize: 'Reassurance', engage: 'Social Proof',
@@ -75,7 +81,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
   const [convo, setConvo] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // AI Auto-Reply state — approval flow only (never auto-sends)
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiDraft, setAiDraft] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -88,7 +93,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
     }
   }, [conversationId]);
 
-  // Load conversation
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -107,12 +111,10 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
     return () => { cancelled = true; };
   }, [conversationId]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [convo?.messages?.length]);
 
-  // Auto-generate AI draft (backend) when a new buyer message arrives
   useEffect(() => {
     if (!aiEnabled || !convo?.messages?.length) return;
     const lastMsg = convo.messages[convo.messages.length - 1];
@@ -149,7 +151,7 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
 
   const handleAcceptDraft = useCallback(async (text) => {
     if (!aiDraft?.id) {
-      // Fallback: no backend draft — send as plain seller message
+
       await handleSendRaw(text);
       setAiDraft(null);
       onToast?.('AI response sent');
@@ -247,7 +249,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
 
   return (
     <div className="flex flex-col h-full">
-      {/* Chat header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant bg-surface-container-lowest flex-shrink-0">
         <button
           onClick={onBack}
@@ -266,7 +267,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
         </div>
       </div>
 
-      {/* AI toggle — approval mode only, never auto-send */}
       <AutoReplyToggle
         enabled={aiEnabled}
         onToggle={setAiEnabled}
@@ -274,7 +274,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
         onModeChange={() => {}}
       />
 
-      {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 bg-background/50">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-on-surface-variant">
@@ -308,7 +307,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
         )}
       </div>
 
-      {/* AI Draft Panel — seller reviews/edits/approves */}
       {aiDraft && (
         <AIDraft
           draft={aiDraft}
@@ -319,7 +317,6 @@ export default function ChatView({ conversationId, sellerId, onBack, onRefresh, 
         />
       )}
 
-      {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3 border-t border-outline-variant bg-surface-container-lowest flex-shrink-0">
         <div className="flex-1 relative">
           <textarea

@@ -1,10 +1,3 @@
-"""
-Analytics background worker — aggregates per-seller metrics.
-
-Runs periodically (started from main.py), never on every request. Writes into
-`analytics` (summary) and `trust_scores` tables. Chat response-time is read
-from MongoDB (messages collection), the rest from PostgreSQL.
-"""
 import asyncio
 import logging
 import time
@@ -24,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 async def _compute_seller_metrics(db: AsyncSession, seller_id: int) -> dict:
-    """Aggregate order/review metrics for one seller."""
     orders_result = await db.execute(
         select(
             func.count(Order.id),
@@ -48,7 +40,6 @@ async def _compute_seller_metrics(db: AsyncSession, seller_id: int) -> dict:
     avg_rating = reviews_result.scalar()
     avg_rating = float(avg_rating) if avg_rating is not None else 0.0
 
-    # Response time: from MongoDB messages — avg gap between buyer msg and next seller reply
     response_time_avg = await _compute_response_time(seller_id)
 
     total_orders = total_orders or 0
@@ -58,9 +49,8 @@ async def _compute_seller_metrics(db: AsyncSession, seller_id: int) -> dict:
     cancellation_rate = round(cancelled / total_orders, 3) if total_orders else 0.0
     conversion_rate = round(successful_orders / max(total_orders, 1), 3)
 
-    # Trust score: reviews + order health + verification
-    review_score = round((avg_rating or 0) * 20, 1)  # 5 stars → 100
-    compliance_score = 70.0  # placeholder until verification documents are scored
+    review_score = round((avg_rating or 0) * 20, 1)
+    compliance_score = 70.0
     communication_score = 60.0 if response_time_avg is None else max(0, round(100 - response_time_avg / 60, 1))
     overall = round(
         0.4 * review_score + 0.2 * compliance_score + 0.2 * communication_score
@@ -84,11 +74,6 @@ async def _compute_seller_metrics(db: AsyncSession, seller_id: int) -> dict:
 
 
 async def _compute_response_time(seller_id: int):
-    """Average seconds between a buyer message and the seller's reply.
-
-    Bounded scans (a sample is fine for an average) wrapped in a timeout so a
-    slow/hung Mongo never wedges the background analytics loop.
-    """
     try:
         messages = await get_messages_collection()
         convos = await get_conversations_collection()
@@ -114,7 +99,7 @@ async def _compute_response_time(seller_id: int):
             if prev.get("senderType") == "buyer" and cur.get("senderType") == "seller":
                 try:
                     delta = (cur["createdAt"] - prev["createdAt"]).total_seconds()
-                    if 0 < delta < 60 * 60 * 24 * 7:  # ignore >1 week gaps
+                    if 0 < delta < 60 * 60 * 24 * 7:
                         gaps.append(delta)
                 except (TypeError, KeyError):
                     continue
@@ -130,12 +115,10 @@ async def _compute_response_time(seller_id: int):
 
 
 async def compute_for_seller(seller_id: int) -> None:
-    """Compute and persist analytics + trust score for one seller."""
     async with AsyncSessionLocal() as db:
         try:
             metrics = await _compute_seller_metrics(db, seller_id)
 
-            # Upsert analytics summary (keep one row per seller)
             await db.execute(
                 delete(AnalyticsSummary).where(AnalyticsSummary.seller_id == seller_id)
             )
@@ -151,7 +134,6 @@ async def compute_for_seller(seller_id: int) -> None:
             )
             db.add(summary)
 
-            # Upsert trust score
             existing = await db.execute(
                 select(TrustScore).where(TrustScore.seller_id == seller_id)
             )
@@ -173,14 +155,11 @@ async def compute_for_seller(seller_id: int) -> None:
 
 
 async def compute_all() -> None:
-    """Run analytics + trust score computation for every seller."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(SellerProfile.id))
         seller_ids = [row[0] for row in result.all()]
     start = time.monotonic()
     logger.info("Computing analytics for %d sellers", len(seller_ids))
-    # Bounded concurrency: a few sellers at a time so a full pass finishes
-    # quickly without exhausting the DB connection pool.
     semaphore = asyncio.Semaphore(5)
 
     async def _run(seller_id: int) -> None:

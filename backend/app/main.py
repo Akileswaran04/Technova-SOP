@@ -1,11 +1,3 @@
-"""
-TECHNOVA Backend — AI-Powered Digital Business Ecosystem for MSMEs.
-
-Architecture:
-- PostgreSQL: Core business data (users, sellers, buyers, products, orders, payments, transactions, analytics)
-- MongoDB: High-volume communication data (conversations, messages, AI drafts)
-- Redis: Real-time features (online status, typing, unread, pub/sub, cache)
-"""
 import asyncio
 import logging
 
@@ -33,6 +25,10 @@ from app.modules.customer_management.router import router as customer_management
 from app.modules.ai_communication.router import router as ai_communication_router
 from app.modules.human_approval.router import router as human_approval_router
 from app.modules.orders.router import router as orders_router
+from app.modules.cart.router import router as cart_router
+from app.modules.negotiation.router import router as negotiation_router
+from app.modules.recommendation.router import router as recommendation_router
+from app.modules.assistant.router import router as assistant_router
 from app.modules.payments.router import router as payments_router
 from app.modules.analytics.router import router as analytics_router
 from app.modules.admin.router import router as admin_router
@@ -42,13 +38,12 @@ from app.modules.analytics.worker import compute_all
 from app.infrastructure.postgres.database import AsyncSessionLocal
 from sqlalchemy import text
 
-# Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-ANALYTICS_INTERVAL_SECONDS = 5 * 60  # recompute summaries every 5 minutes
-ANALYTICS_STARTUP_DELAY_SECONDS = 60  # let early requests through before the first heavy pass
-DB_KEEPALIVE_INTERVAL_SECONDS = 60  # keep a scale-to-zero Neon compute warm
+ANALYTICS_INTERVAL_SECONDS = 5 * 60
+ANALYTICS_STARTUP_DELAY_SECONDS = 60
+DB_KEEPALIVE_INTERVAL_SECONDS = 60
 
 
 def create_app() -> FastAPI:
@@ -61,9 +56,6 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
     )
 
-    # ============================================
-    # Exception Handlers
-    # ============================================
 
     @app.exception_handler(NotFoundException)
     async def not_found_handler(request: Request, exc: NotFoundException):
@@ -89,9 +81,6 @@ def create_app() -> FastAPI:
     async def technova_handler(request: Request, exc: TechnovaException):
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
-    # ============================================
-    # Middleware
-    # ============================================
 
     app.add_middleware(
         CORSMiddleware,
@@ -101,19 +90,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # ============================================
-    # Lifecycle
-    # ============================================
 
     analytics_task = None
     keepalive_task = None
 
     @app.on_event("startup")
     async def startup_event():
-        """Initialize database connections, indexes, and background workers."""
         logger.info("Starting TECHNOVA Backend...")
 
-        # MongoDB connection + chat indexes
         try:
             await MongoDBClient.connect_to_db()
             await ensure_chat_indexes()
@@ -121,7 +105,6 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.warning(f"MongoDB connection failed (optional service): {str(e)}")
 
-        # Redis connection + realtime forwarder
         try:
             await RedisClient.connect_to_redis()
             start_realtime_forwarder()
@@ -129,12 +112,9 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.warning(f"Redis connection failed (optional service): {str(e)}")
 
-        # Background analytics worker (aggregates, never per-request)
         global analytics_task
         analytics_task = asyncio.create_task(_analytics_loop())
 
-        # Keep the DB warm: hosted Postgres that scales to zero would otherwise
-        # cold-start (seconds of latency) on the first request after idle.
         global keepalive_task
         keepalive_task = asyncio.create_task(_db_keepalive_loop())
 
@@ -142,7 +122,6 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def shutdown_event():
-        """Clean up connections and background tasks."""
         logger.info("Shutting down TECHNOVA Backend...")
 
         if analytics_task is not None:
@@ -166,13 +145,6 @@ def create_app() -> FastAPI:
         logger.info("TECHNOVA Backend shutdown complete")
 
     async def _analytics_loop():
-        """Periodically recompute analytics summaries + trust scores.
-
-        Waits a bit before the first run so this expensive, connection-pool-
-        heavy pass doesn't compete with the very first requests right after
-        the server (re)starts — it was previously firing immediately on
-        boot and measurably slowing down early page loads.
-        """
         await asyncio.sleep(ANALYTICS_STARTUP_DELAY_SECONDS)
         while True:
             try:
@@ -182,7 +154,6 @@ def create_app() -> FastAPI:
             await asyncio.sleep(ANALYTICS_INTERVAL_SECONDS)
 
     async def _db_keepalive_loop():
-        """Lightweight Postgres ping so the compute stays warm between requests."""
         while True:
             try:
                 async with AsyncSessionLocal() as session:
@@ -191,13 +162,9 @@ def create_app() -> FastAPI:
                 logger.warning("DB keep-alive ping failed: %s", exc)
             await asyncio.sleep(DB_KEEPALIVE_INTERVAL_SECONDS)
 
-    # ============================================
-    # API Routes
-    # ============================================
 
     @app.get("/api/v1/health")
     async def health_check():
-        """System health check endpoint."""
         return {
             "status": "healthy",
             "service": "technova-api",
@@ -205,9 +172,6 @@ def create_app() -> FastAPI:
             "environment": settings.ENVIRONMENT,
         }
 
-    # ============================================
-    # Module Routers
-    # ============================================
 
     app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
     app.include_router(seller_profile_router, prefix="/api/v1/sellers", tags=["Seller Profile"])
@@ -219,14 +183,17 @@ def create_app() -> FastAPI:
     app.include_router(ai_communication_router, prefix="/api/v1/ai", tags=["AI Communication"])
     app.include_router(human_approval_router, prefix="/api/v1", tags=["Human Approval"])
     app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
+    app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
+    app.include_router(negotiation_router, prefix="/api/v1/negotiation", tags=["Negotiation"])
+    app.include_router(recommendation_router, prefix="/api/v1/recommendation", tags=["Recommendation"])
+    app.include_router(assistant_router, prefix="/api/v1/assistant", tags=["Assistant"])
     app.include_router(payments_router, prefix="/api/v1", tags=["Payments"])
     app.include_router(analytics_router, prefix="/api/v1/analytics", tags=["Analytics"])
     app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
     app.include_router(api_integration_router, prefix="/api/v1", tags=["API Integration"])
-    app.include_router(ws_router)  # /ws/chat
+    app.include_router(ws_router)
 
     return app
 
 
-# Create FastAPI application
 app = create_app()

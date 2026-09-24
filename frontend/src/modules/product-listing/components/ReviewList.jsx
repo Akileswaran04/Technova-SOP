@@ -1,7 +1,4 @@
-/**
- * ReviewList — displays customer reviews with MD3 theme.
- * Star ratings, seller reply capability, Material icons.
- */
+
 import { useState } from 'react';
 
 function StarRating({ rating }) {
@@ -45,7 +42,6 @@ function ReviewItem({ review, onReply }) {
 
       <p className="text-body-md text-on-surface-variant leading-relaxed">{review.comment}</p>
 
-      {/* Seller reply */}
       {review.sellerReply && !replying ? (
         <div className="ml-6 mt-2 bg-surface-container-lowest border border-outline-variant rounded-lg p-3">
           <p className="text-label-sm font-medium text-primary mb-1 flex items-center gap-1">

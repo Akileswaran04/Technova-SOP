@@ -1,7 +1,4 @@
-/**
- * CustomerDrawer — slide-in drawer with MD3 theme.
- * Review history, editable contact/notes, Material icons.
- */
+
 import { useState } from 'react';
 import { updateCustomer } from '../../../services/storage';
 

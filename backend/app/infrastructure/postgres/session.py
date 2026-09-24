@@ -1,6 +1,3 @@
-"""
-Database session dependency for FastAPI.
-"""
 
 from typing import AsyncGenerator
 
@@ -10,7 +7,6 @@ from app.infrastructure.postgres.database import AsyncSessionLocal
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Yield an async database session, auto-closing after use."""
     async with AsyncSessionLocal() as session:
         try:
             yield session

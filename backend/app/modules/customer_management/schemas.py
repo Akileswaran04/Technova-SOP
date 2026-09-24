@@ -1,4 +1,3 @@
-"""Pydantic schemas for buyer discovery module."""
 from datetime import datetime
 from typing import Optional, List
 
@@ -7,7 +6,6 @@ from pydantic import BaseModel, Field
 
 
 class CustomerCreate(BaseModel):
-    """Create a customer record."""
     name: str = Field(..., min_length=1, max_length=255)
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -16,7 +14,6 @@ class CustomerCreate(BaseModel):
 
 
 class CustomerUpdate(BaseModel):
-    """Update a customer record."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -25,7 +22,6 @@ class CustomerUpdate(BaseModel):
 
 
 class CustomerResponse(BaseModel):
-    """Customer response."""
     id: int
     seller_id: int
     name: str

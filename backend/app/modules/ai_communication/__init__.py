@@ -1,1 +1,1 @@
-"""AI Communication module."""
+pass

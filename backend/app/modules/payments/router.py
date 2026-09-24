@@ -1,4 +1,3 @@
-"""Payments Router — mock ledger HTTP endpoints."""
 from fastapi import APIRouter, Depends, status
 
 from app.core.dependencies import get_current_user
@@ -17,7 +16,6 @@ async def create_payment(
     user=Depends(get_current_user),
     service: PaymentService = Depends(get_payment_service),
 ):
-    """Record a mock payment against an order."""
     return await service.create_payment(user.id, user.role, data)
 
 
@@ -27,7 +25,6 @@ async def get_payment(
     user=Depends(get_current_user),
     service: PaymentService = Depends(get_payment_service),
 ):
-    """Get the payment for an order."""
     return await service.get_payment_for_order(user.id, user.role, order_id)
 
 
@@ -37,7 +34,6 @@ async def create_transaction(
     user=Depends(get_current_user),
     service: PaymentService = Depends(get_payment_service),
 ):
-    """Record a mock transaction for an order."""
     return await service.create_transaction(user.id, user.role, data)
 
 
@@ -47,5 +43,4 @@ async def get_transaction(
     user=Depends(get_current_user),
     service: PaymentService = Depends(get_payment_service),
 ):
-    """Get a transaction by ID (participant only)."""
     return await service.get_transaction(user.id, user.role, transaction_id)

@@ -1,13 +1,15 @@
-/**
- * BuyerProfilePage — view/edit the buyer's own profile.
- */
+
 import { useState, useEffect } from 'react';
-import { getBuyerById, updateBuyer } from '../../../services/storage';
+import { getBuyerById, updateBuyer, getMyLanguage, updatePreferredLanguage } from '../../../services/storage';
+
+const LANGUAGES = ['English', 'Tamil', 'Hindi', 'Telugu', 'Kannada', 'Malayalam'];
 
 export default function BuyerProfilePage({ onToast }) {
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
+  const [language, setLanguage] = useState('English');
+  const [savingLanguage, setSavingLanguage] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -22,7 +24,21 @@ export default function BuyerProfilePage({ onToast }) {
         default_address: data?.default_address || '',
       });
     })();
+    getMyLanguage().then((lang) => setLanguage(lang === 'en' ? 'English' : lang));
   }, []);
+
+  const saveLanguage = async (next) => {
+    setLanguage(next);
+    setSavingLanguage(true);
+    try {
+      await updatePreferredLanguage(next);
+      onToast?.('Language preference saved');
+    } catch (err) {
+      onToast?.(err.message || 'Could not save language', 'error');
+    } finally {
+      setSavingLanguage(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -80,6 +96,18 @@ export default function BuyerProfilePage({ onToast }) {
             </div>
           </div>
         ))}
+        <div className="flex flex-col gap-1">
+          <label className="text-label-md text-on-surface">Preferred Language</label>
+          <p className="text-label-sm text-on-surface-variant">Used for chat translation and the voice assistant.</p>
+          <select
+            value={language}
+            onChange={(e) => saveLanguage(e.target.value)}
+            disabled={savingLanguage}
+            className="w-full h-11 px-4 rounded-lg border border-outline-variant bg-surface text-on-surface text-body-md focus:border-primary focus:outline-none"
+          >
+            {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
         <button
           onClick={save}
           disabled={saving}

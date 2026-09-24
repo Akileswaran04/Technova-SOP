@@ -1,4 +1,3 @@
-"""Buyer Discovery Service — business logic layer."""
 
 
 from sqlalchemy import select
@@ -11,14 +10,11 @@ from app.core.exceptions import NotFoundException
 
 
 class CustomerService:
-    """Business logic for buyer discovery / customer management."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
         self.customer_repo = CustomerRepository(db)
 
     async def _get_seller_id_from_user(self, user_id: int) -> int:
-        """Resolve seller_profile UUID from user UUID."""
         result = await self.db.execute(
             select(SellerProfile).where(SellerProfile.user_id == user_id)
         )

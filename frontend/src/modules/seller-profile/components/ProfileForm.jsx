@@ -1,9 +1,45 @@
-/**
- * ProfileForm — LinkedIn/MD3 style profile.
- * All data loaded from backend API.
- */
-import { useState, useRef, useMemo } from 'react';
-import { updateSeller, computeTrustScore, getReviewCount, getRecentReviews } from '../../../services/storage';
+
+import { useState, useRef, useMemo, useEffect } from 'react';
+import { updateSeller, computeTrustScore, getReviewCount, getRecentReviews, getMyLanguage, updatePreferredLanguage } from '../../../services/storage';
+
+const LANGUAGES = ['English', 'Tamil', 'Hindi', 'Telugu', 'Kannada', 'Malayalam'];
+
+function LanguagePreference({ onToast }) {
+  const [language, setLanguage] = useState('English');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getMyLanguage().then((lang) => setLanguage(lang === 'en' ? 'English' : lang));
+  }, []);
+
+  const save = async (next) => {
+    setLanguage(next);
+    setSaving(true);
+    try {
+      await updatePreferredLanguage(next);
+      onToast?.('Language preference saved');
+    } catch (err) {
+      onToast?.(err.message || 'Could not save language', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="col-span-1 lg:col-span-12 bg-surface-container-lowest rounded-xl border border-outline-variant p-4">
+      <label className="text-label-md text-on-surface font-semibold">Preferred Language</label>
+      <p className="text-label-sm text-on-surface-variant mt-0.5 mb-2">Buyer messages are auto-translated into this language for you.</p>
+      <select
+        value={language}
+        onChange={(e) => save(e.target.value)}
+        disabled={saving}
+        className="w-full h-11 px-4 rounded-lg border border-outline-variant bg-surface text-on-surface text-body-md focus:border-primary focus:outline-none"
+      >
+        {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+      </select>
+    </div>
+  );
+}
 
 function getTimeAgo(dateString) {
   const date = new Date(dateString);
@@ -171,9 +207,6 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
   const [documents, setDocuments] = useState(seller.documents || []);
   const [loading, setLoading] = useState(false);
 
-  // Trust/review stats derived from the products already loaded in App state.
-  // This used to fire 4 requests on tab open — 3 of them re-fetched the full
-  // product catalog just to compute averages client-side.
   const { trustScore, reviewCount, recentReviews, totalProducts } = useMemo(() => ({
     trustScore: computeTrustScore(products),
     reviewCount: getReviewCount(products),
@@ -291,7 +324,6 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 -mt-12 relative z-10">
-        {/* Trust Score Card */}
         <div className="col-span-1 lg:col-span-4 bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-sm flex flex-col overflow-hidden">
           <div className="relative pt-8 pb-6 px-6 bg-gradient-to-b from-primary-container/10 to-transparent">
             <div className="flex flex-col items-center relative">
@@ -337,7 +369,6 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
           </div>
         </div>
 
-        {/* Store Details */}
         <div className="col-span-1 lg:col-span-8 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-headline-lg text-headline-lg text-on-surface">Store Details</h3>
@@ -376,7 +407,8 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
           </div>
         </div>
 
-        {/* Quick Stats */}
+        <LanguagePreference onToast={onToast} />
+
         <div className="col-span-1 lg:col-span-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
@@ -386,7 +418,7 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
               { icon: 'event', label: 'Member Since', value: `${monthsOld}mo`, color: 'text-tertiary bg-tertiary-container/30' },
             ].map((stat) => (
               <div key={stat.label} className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 flex flex-col items-center text-center shadow-sm">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-3 ${stat.color}`}>  
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-3 ${stat.color}`}>
                   <span className="material-symbols-outlined text-[22px]">{stat.icon}</span>
                 </div>
                 <span className="font-headline-md text-headline-md text-on-surface">{stat.value}</span>
@@ -396,7 +428,6 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
           </div>
         </div>
 
-        {/* About Us */}
         <div className="col-span-1 lg:col-span-12 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -416,7 +447,6 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
             maxLength={500} rows={4} />
         </div>
 
-        {/* Business Documents */}
         <div className="col-span-1 lg:col-span-12 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
             <div className="flex items-center gap-3">
@@ -461,7 +491,6 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
           )}
         </div>
 
-        {/* Recent Activity */}
         {recentReviews.length > 0 && (
           <div className="col-span-1 lg:col-span-12 bg-surface-container-lowest rounded-2xl border border-outline-variant p-6 md:p-8 shadow-sm">
             <div className="flex items-center justify-between mb-6">
@@ -510,7 +539,6 @@ export default function ProfileForm({ seller, products = [], onSellerUpdate, onT
           </div>
         )}
 
-        {/* Form Actions */}
         <div className="col-span-1 lg:col-span-12 flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
           {editing ? (
             <>

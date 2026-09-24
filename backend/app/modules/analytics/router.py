@@ -1,4 +1,3 @@
-"""Analytics Router — HTTP endpoints only."""
 from fastapi import APIRouter, Depends
 
 from app.modules.analytics.dependencies import get_analytics_service
@@ -14,7 +13,6 @@ async def get_analytics(
     force: bool = False,
     service: AnalyticsService = Depends(get_analytics_service),
 ):
-    """Get aggregated analytics for a seller."""
     return await service.get_seller_analytics(seller_id, force=force)
 
 
@@ -23,5 +21,4 @@ async def get_trust_score(
     seller_id: int,
     service: AnalyticsService = Depends(get_analytics_service),
 ):
-    """Get the trust-score badge for a seller."""
     return await service.get_seller_trust_score(seller_id)

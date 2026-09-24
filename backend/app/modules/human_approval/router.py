@@ -1,4 +1,3 @@
-"""Human Approval Router — AI draft review and send endpoints."""
 from typing import Optional, List
 
 
@@ -21,7 +20,6 @@ async def generate_draft(
     user_id: str = Depends(get_current_user_id),
     service: HumanApprovalService = Depends(get_human_approval_service),
 ):
-    """Generate an AI-drafted reply (never auto-sent)."""
     return await service.generate_draft(int(user_id), conversation_id, reply_to_message_id)
 
 
@@ -32,7 +30,6 @@ async def list_drafts(
     user_id: str = Depends(get_current_user_id),
     service: HumanApprovalService = Depends(get_human_approval_service),
 ):
-    """List drafts for a conversation."""
     return await service.list_drafts(int(user_id), conversation_id, status=status)
 
 
@@ -43,7 +40,6 @@ async def edit_draft(
     user_id: str = Depends(get_current_user_id),
     service: HumanApprovalService = Depends(get_human_approval_service),
 ):
-    """Edit a draft before approving."""
     return await service.edit_draft(int(user_id), draft_id, data.content)
 
 
@@ -54,7 +50,6 @@ async def set_draft_status(
     user_id: str = Depends(get_current_user_id),
     service: HumanApprovalService = Depends(get_human_approval_service),
 ):
-    """Approve or reject a draft."""
     return await service.set_status(int(user_id), draft_id, data.status)
 
 
@@ -64,5 +59,4 @@ async def send_draft(
     user_id: str = Depends(get_current_user_id),
     service: HumanApprovalService = Depends(get_human_approval_service),
 ):
-    """Approve + send the draft as a seller message."""
     return await service.send_draft(int(user_id), draft_id)

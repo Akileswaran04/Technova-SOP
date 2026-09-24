@@ -1,10 +1,9 @@
-"""Authentication Router — HTTP endpoints only."""
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_current_user_id
 from app.infrastructure.redis.ratelimit import rate_limit
 from app.modules.authentication.dependencies import get_auth_service
-from app.modules.authentication.schemas import RegisterRequest, LoginRequest, DemoLoginRequest, TokenResponse
+from app.modules.authentication.schemas import RegisterRequest, LoginRequest, DemoLoginRequest, TokenResponse, LanguageUpdate
 from app.modules.authentication.service import AuthService
 
 router = APIRouter()
@@ -19,7 +18,6 @@ async def register(
     data: RegisterRequest,
     service: AuthService = Depends(get_auth_service),
 ):
-    """Register a new seller or buyer account (role picked once, at registration)."""
     return await service.register(data)
 
 
@@ -32,7 +30,6 @@ async def login(
     data: LoginRequest,
     service: AuthService = Depends(get_auth_service),
 ):
-    """Login with email/phone and password."""
     return await service.login(data)
 
 
@@ -45,19 +42,11 @@ async def demo_login(
     data: DemoLoginRequest,
     service: AuthService = Depends(get_auth_service),
 ):
-    """One-click temporary login with a seeded demo account.
-
-    Keys: seller1, seller2, buyer1, buyer2, admin (see seed_demo_users.py).
-    """
     return await service.demo_login(data)
 
 
 @router.post("/logout")
 async def logout():
-    """Logout — stateless JWT; the client discards the token.
-
-    If server-side revocation is needed later, add a Redis denylist here.
-    """
     return {"message": "Logged out successfully"}
 
 
@@ -66,7 +55,6 @@ async def get_me(
     user_id: str = Depends(get_current_user_id),
     service: AuthService = Depends(get_auth_service),
 ):
-    """Get current user info plus the profile matching their role."""
     uid = int(user_id)
     user = await service.get_current_user(uid)
     role = user.role.value if hasattr(user.role, "value") else user.role
@@ -78,13 +66,12 @@ async def get_me(
             "full_name": user.full_name,
             "phone": user.phone,
             "role": role,
+            "preferred_language": user.preferred_language,
         } if user else None,
         "seller": None,
         "buyer": None,
     }
 
-    # Profile comes from the eager-loaded relationship (one query total for
-    # /auth/me instead of three sequential round trips)
     if role == "seller":
         profile = user.seller_profile
         base["seller"] = {
@@ -113,3 +100,13 @@ async def get_me(
         } if profile else None
 
     return base
+
+
+@router.patch("/me/language")
+async def update_my_language(
+    data: LanguageUpdate,
+    user_id: str = Depends(get_current_user_id),
+    service: AuthService = Depends(get_auth_service),
+):
+    await service.update_language(int(user_id), data.preferred_language)
+    return {"preferred_language": data.preferred_language}

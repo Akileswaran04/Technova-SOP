@@ -1,8 +1,3 @@
-"""WebSocket realtime + admin flow smoke test.
-
-Requires server on 127.0.0.1:8010 with at least one seller/buyer pair
-conversation already created (see smoke_test.py).
-"""
 import asyncio
 import json
 import sys
@@ -51,14 +46,12 @@ async def ws_flow():
     async with websockets.connect(f"{WS}?token={buyer_token}") as buyer_ws, \
                websockets.connect(f"{WS}?token={seller_token}") as seller_ws:
 
-        # Join both sides
         await buyer_ws.send(json.dumps({"type": "join", "conversation_id": conversation_id}))
         await seller_ws.send(json.dumps({"type": "join", "conversation_id": conversation_id}))
         b_join = json.loads(await buyer_ws.recv())
         s_join = json.loads(await seller_ws.recv())
         check("both sides join", b_join.get("event") == "joined" and s_join.get("event") == "joined", str(b_join)[:120])
 
-        # Buyer sends via WS — ack arrives after its own pub/sub echo
         await buyer_ws.send(json.dumps({
             "type": "send", "conversation_id": conversation_id,
             "content": "Real-time hello", "client_message_id": f"ws-{suffix}",
@@ -71,16 +64,13 @@ async def ws_flow():
                 break
         check("sender acked", ack is not None and ack["message"]["content"] == "Real-time hello", str(ack)[:150])
 
-        # Seller receives via Redis pub/sub → WS
         delivered = json.loads(await asyncio.wait_for(seller_ws.recv(), timeout=10))
         check("recipient receives message", delivered.get("event") == "message:new" and delivered["message"]["content"] == "Real-time hello", str(delivered)[:150])
 
-        # Typing indicator
         await buyer_ws.send(json.dumps({"type": "typing", "conversation_id": conversation_id, "is_typing": True}))
         typing = json.loads(await asyncio.wait_for(seller_ws.recv(), timeout=10))
         check("typing event delivered", typing.get("event") == "typing" and typing.get("is_typing") is True, str(typing)[:120])
 
-        # Reconnection sync — only the gap
         await seller_ws.send(json.dumps({"type": "join", "conversation_id": conversation_id, "last_received_sequence": 0}))
         sync = json.loads(await seller_ws.recv())
         check("reconnection gap sync", sync.get("event") == "sync" and len(sync.get("items", [])) >= 1, str(sync)[:150])
@@ -89,14 +79,12 @@ async def ws_flow():
         f"{BASE}/conversations/{conversation_id}/messages?limit=100",
         headers={"Authorization": f"Bearer {seller_token}"}).json().get("items", [])) >= 1)
 
-    # Unread counter on Redis is surfaced via conversation unread_count
     convos = client.get(f"{BASE}/conversations", headers={"Authorization": f"Bearer {seller_token}"}).json()
     check("conversation listed after WS messages", any(c["id"] == conversation_id for c in convos.get("items", [])))
 
 
 async def admin_flow():
     print("== Phase 6: admin flow ==")
-    # Create an admin user directly (role enum supports 'admin')
     from app.infrastructure.postgres.database import AsyncSessionLocal
     from app.modules.seller_profile.models import User  # noqa: F401
     from app.modules.buyer_profile.models import BuyerProfile  # noqa: F401 — registers relationship
@@ -113,7 +101,6 @@ async def admin_flow():
     check("admin login", login.status_code == 200, login.text[:200])
     admin_token = login.json()["access_token"]
 
-    # Create a verification for a seller
     seller = client.post(f"{BASE}/auth/register", json={
         "email": f"verif-seller-{suffix}@example.com", "password": "secret123",
         "role": "seller", "business_name": "Verify Co", "license_number": "LIC-XYZ",
@@ -125,7 +112,6 @@ async def admin_flow():
     check("admin lists verifications", verifs.status_code == 200, verifs.text[:200])
     check("no verifications yet (seller didn't submit)", verifs.json() == [])
 
-    # Deny non-admin
     denied = client.get(f"{BASE}/admin/verifications", headers={"Authorization": f"Bearer {seller['access_token']}"})
     check("non-admin blocked from admin API", denied.status_code == 403, denied.text[:200])
 

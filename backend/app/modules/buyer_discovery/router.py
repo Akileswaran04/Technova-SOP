@@ -1,4 +1,3 @@
-"""Buyer Discovery Router — buyer-facing search endpoints."""
 from typing import Optional
 
 
@@ -25,7 +24,6 @@ async def discover(
     cursor: Optional[str] = Query(None, description="Opaque offset cursor"),
     service: DiscoveryService = Depends(get_discovery_service),
 ):
-    """Search/filter sellers & products by category, location, budget."""
     offset = int(cursor) if cursor and cursor.isdigit() else 0
     return await service.search_products(
         category=category,
@@ -42,7 +40,6 @@ async def get_seller(
     seller_id: int,
     service: DiscoveryService = Depends(get_discovery_service),
 ):
-    """Public seller profile with trust-score badge."""
     return await service.get_public_seller(seller_id)
 
 
@@ -53,7 +50,6 @@ async def get_seller_products(
     cursor: Optional[str] = Query(None),
     service: ProductService = Depends(get_product_service),
 ):
-    """Public product list for a seller."""
     offset = int(cursor) if cursor and cursor.isdigit() else 0
     products = await service.get_public_seller_products(seller_id, limit=limit, offset=offset)
     return {

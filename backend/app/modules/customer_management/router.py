@@ -1,4 +1,3 @@
-"""Buyer Discovery Router — HTTP endpoints only."""
 from typing import List
 
 
@@ -19,7 +18,6 @@ async def list_customers(
     user_id: str = Depends(get_current_user_id),
     service: CustomerService = Depends(get_customer_service),
 ):
-    """List all customers for the current seller."""
     return await service.get_customers_by_seller(int(user_id))
 
 
@@ -29,7 +27,6 @@ async def create_customer(
     user_id: str = Depends(get_current_user_id),
     service: CustomerService = Depends(get_customer_service),
 ):
-    """Create a new customer record."""
     return await service.create_customer(int(user_id), data)
 
 
@@ -38,7 +35,6 @@ async def get_customer(
     customer_id: int,
     service: CustomerService = Depends(get_customer_service),
 ):
-    """Get a customer by ID."""
     return await service.get_customer(customer_id)
 
 
@@ -48,7 +44,6 @@ async def update_customer(
     data: CustomerUpdate,
     service: CustomerService = Depends(get_customer_service),
 ):
-    """Update a customer record."""
     return await service.update_customer(customer_id, data)
 
 
@@ -57,5 +52,4 @@ async def delete_customer(
     customer_id: int,
     service: CustomerService = Depends(get_customer_service),
 ):
-    """Delete a customer record."""
     await service.delete_customer(customer_id)

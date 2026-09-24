@@ -1,4 +1,3 @@
-"""Admin Service — verification review, moderation, audit logging."""
 from typing import Optional
 
 from sqlalchemy import select, cast
@@ -13,8 +12,6 @@ from app.core.exceptions import NotFoundException, ValidationException
 
 
 class AdminService:
-    """Business logic for admin module."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -48,7 +45,6 @@ class AdminService:
     async def review_verification(
         self, admin_user_id: int, verification_id: int, data: VerificationDecision
     ) -> dict:
-        """Approve/reject a verification; update seller status; audit the action."""
         result = await self.db.execute(
             select(SellerVerification).where(SellerVerification.id == verification_id)
         )
@@ -66,8 +62,6 @@ class AdminService:
         verification.reviewed_at = datetime.now(timezone.utc)
         verification.rejection_reason = data.reason if data.decision == "rejected" else None
 
-        # Update the seller profile's verification state machine
-        # (submitted → under_review → verified|rejected per validators.py)
         seller_result = await self.db.execute(
             select(SellerProfile).where(SellerProfile.id == verification.seller_id)
         )
@@ -77,7 +71,6 @@ class AdminService:
             await self.db.flush()
             seller.verification_status = "verified" if data.decision == "approved" else "rejected"
 
-        # Audit log — every admin action is recorded
         audit = AuditLog(
             user_id=admin_user_id,
             action=f"verification.{data.decision}",

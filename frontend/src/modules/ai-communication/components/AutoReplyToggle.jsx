@@ -1,9 +1,4 @@
-/**
- * AutoReplyToggle — Toggle switch for AI auto-reply mode.
- * Two modes:
- * - Approval Required (default): AI drafts responses, seller reviews before sending
- * - Auto Send: AI sends responses automatically without review
- */
+
 import { useState } from 'react';
 
 export default function AutoReplyToggle({ enabled, onToggle, mode, onModeChange }) {
@@ -11,12 +6,9 @@ export default function AutoReplyToggle({ enabled, onToggle, mode, onModeChange 
 
   return (
     <div className="relative">
-      {/* Toggle row */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-surface-container-low border-b border-outline-variant">
-        {/* AI icon */}
         <span className="material-symbols-outlined text-[20px] text-primary">auto_awesome</span>
 
-        {/* Label */}
         <div className="flex-1 min-w-0">
           <p className="text-label-md text-on-surface font-medium">NeuroChat Auto-Reply</p>
           <p className="text-label-sm text-on-surface-variant">
@@ -27,7 +19,6 @@ export default function AutoReplyToggle({ enabled, onToggle, mode, onModeChange 
           </p>
         </div>
 
-        {/* Mode selector (only when enabled) */}
         {enabled && (
           <div className="flex items-center bg-surface rounded-lg p-0.5 border border-outline-variant">
             <button
@@ -53,7 +44,6 @@ export default function AutoReplyToggle({ enabled, onToggle, mode, onModeChange 
           </div>
         )}
 
-        {/* Toggle switch */}
         <button
           onClick={() => onToggle(!enabled)}
           className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
@@ -67,7 +57,6 @@ export default function AutoReplyToggle({ enabled, onToggle, mode, onModeChange 
           />
         </button>
 
-        {/* Info button */}
         <button
           onClick={() => setShowInfo(!showInfo)}
           className="p-1 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors"
@@ -76,7 +65,6 @@ export default function AutoReplyToggle({ enabled, onToggle, mode, onModeChange 
         </button>
       </div>
 
-      {/* Info panel */}
       {showInfo && (
         <div className="px-4 py-3 bg-primary-container/10 border-b border-outline-variant text-label-sm text-on-surface-variant space-y-1.5">
           <p className="flex items-start gap-2">

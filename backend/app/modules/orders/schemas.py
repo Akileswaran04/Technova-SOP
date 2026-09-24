@@ -1,4 +1,3 @@
-"""Pydantic schemas for orders module."""
 from datetime import datetime
 from typing import Optional, List, Literal
 
@@ -7,13 +6,11 @@ from pydantic import BaseModel, Field
 
 
 class OrderItemCreate(BaseModel):
-    """A product line in an order."""
     product_id: int
     quantity: int = Field(..., ge=1)
 
 
 class OrderCreate(BaseModel):
-    """Create an order from product line items."""
     items: List[OrderItemCreate] = Field(..., min_length=1)
     shipping_address: Optional[str] = Field(None, max_length=500)
     notes: Optional[str] = None
@@ -21,7 +18,6 @@ class OrderCreate(BaseModel):
 
 
 class OrderItemResponse(BaseModel):
-    """Order line item."""
     id: int
     product_id: int
     quantity: int
@@ -30,7 +26,6 @@ class OrderItemResponse(BaseModel):
 
 
 class OrderResponse(BaseModel):
-    """Order response with items and payment/transaction refs."""
     id: int
     order_number: str
     buyer_id: int
@@ -46,13 +41,31 @@ class OrderResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+OrderStatus = Literal[
+    "pending", "confirmed", "shipped", "delivered", "cancelled", "returned",
+    "created", "payment_pending", "paid", "seller_confirmed", "processing",
+    "packed", "ready_for_pickup", "picked_up", "in_transit",
+    "out_for_delivery", "return_requested", "refunded", "delivery_failed",
+]
+
+
 class OrderStatusUpdate(BaseModel):
-    """Seller updates order status (state machine)."""
-    status: Literal["pending", "confirmed", "shipped", "delivered", "cancelled", "returned"]
+    status: OrderStatus
+    location: Optional[str] = Field(None, max_length=255)
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class TrackingEventResponse(BaseModel):
+    id: int
+    order_id: int
+    status: str
+    actor_role: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 class OrderReviewCreate(BaseModel):
-    """Buyer review after an order."""
     rating: int = Field(..., ge=1, le=5)
     title: Optional[str] = Field(None, max_length=255)
     comment: Optional[str] = None

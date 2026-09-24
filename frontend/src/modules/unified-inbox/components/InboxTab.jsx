@@ -1,8 +1,4 @@
-/**
- * InboxTab — WhatsApp-style messaging interface.
- * Left panel: conversation list. Right panel: chat thread.
- * On mobile: shows list first, tap to open chat, back button to return.
- */
+
 import { useState } from 'react';
 import ConversationList from './ConversationList';
 import ChatView from './ChatView';
@@ -15,7 +11,6 @@ export default function InboxTab({ sellerId, onToast, onRefresh }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-0 bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
-      {/* Left: Conversation List */}
       <div className={`${selectedConvo ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-96 border-r border-outline-variant flex-shrink-0`}>
         <ConversationList
           key={refreshKey}
@@ -25,7 +20,6 @@ export default function InboxTab({ sellerId, onToast, onRefresh }) {
         />
       </div>
 
-      {/* Right: Chat View */}
       <div className={`${selectedConvo ? 'flex' : 'hidden lg:flex'} flex-col flex-1 min-w-0`}>
         {selectedConvo ? (
           <ChatView

@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
-"""
-Test database connections for TECHNOVA backend.
-Verifies PostgreSQL, MongoDB, and Redis connectivity.
-
-Usage:
-    python test_db_connections.py
-"""
 
 import asyncio
 import os
 import sys
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Color codes for terminal output
 GREEN = '\033[92m'
 RED = '\033[91m'
 YELLOW = '\033[93m'
@@ -24,7 +15,6 @@ RESET = '\033[0m'
 
 
 async def test_postgres_connection():
-    """Test PostgreSQL/Supabase connection."""
     print(f"\n{BLUE}Testing PostgreSQL (Supabase)...{RESET}")
     try:
         import asyncpg
@@ -34,7 +24,6 @@ async def test_postgres_connection():
             print(f"{RED}✗ DATABASE_URL not set{RESET}")
             return False
         
-        # Parse connection string
         conn = await asyncpg.connect(url)
         result = await conn.fetchval('SELECT 1')
         await conn.close()
@@ -54,7 +43,6 @@ async def test_postgres_connection():
 
 
 async def test_mongodb_connection():
-    """Test MongoDB/Atlas connection."""
     print(f"\n{BLUE}Testing MongoDB (Atlas)...{RESET}")
     try:
         from motor.motor_asyncio import AsyncIOMotorClient as AsyncClient
@@ -66,10 +54,8 @@ async def test_mongodb_connection():
         
         client = AsyncClient(uri, serverSelectionTimeoutMS=5000)
         
-        # Trigger connection with ping
         await client.admin.command('ping')
         
-        # Get database info
         db = client[os.getenv('MONGODB_DB', 'technova')]
         collections = await db.list_collection_names()
         
@@ -86,7 +72,6 @@ async def test_mongodb_connection():
 
 
 async def test_redis_connection():
-    """Test Redis connection."""
     print(f"\n{BLUE}Testing Redis...{RESET}")
     try:
         import redis.asyncio as redis
@@ -98,10 +83,8 @@ async def test_redis_connection():
         
         client = redis.from_url(url, decode_responses=True)
         
-        # Test connection with ping
         pong = await client.ping()
         
-        # Test set/get
         await client.set('test_key', 'test_value')
         value = await client.get('test_key')
         await client.delete('test_key')
@@ -123,7 +106,6 @@ async def test_redis_connection():
 
 
 async def main():
-    """Run all database connection tests."""
     print(f"\n{BLUE}{'='*60}")
     print(f"TECHNOVA Database Connection Test")
     print(f"{'='*60}{RESET}\n")
@@ -133,16 +115,12 @@ async def main():
     
     results = {}
     
-    # Test PostgreSQL
     results['PostgreSQL'] = await test_postgres_connection()
     
-    # Test MongoDB
     results['MongoDB'] = await test_mongodb_connection()
     
-    # Test Redis
     results['Redis'] = await test_redis_connection()
     
-    # Summary
     print(f"\n{BLUE}{'='*60}")
     print(f"Connection Test Summary")
     print(f"{'='*60}{RESET}\n")

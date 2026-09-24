@@ -1,4 +1,3 @@
-"""Payments Service — mock ledger (no external provider)."""
 import uuid
 from typing import Optional
 
@@ -12,8 +11,6 @@ from app.core.exceptions import NotFoundException, ForbiddenException, Validatio
 
 
 class PaymentService:
-    """Business logic for payments/transactions (mock ledger)."""
-
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -46,7 +43,6 @@ class PaymentService:
         return order
 
     async def create_payment(self, user_id: int, user_role: str, data: PaymentCreate) -> dict:
-        """Record a mock payment for an order (idempotent per order)."""
         order = await self._get_order(data.order_id)
         await self._assert_order_access(user_id, user_role, order)
 

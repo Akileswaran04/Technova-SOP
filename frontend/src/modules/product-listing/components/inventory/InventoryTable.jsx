@@ -1,8 +1,4 @@
-/**
- * InventoryTable — stock-focused view with MD3 theme.
- * Material icons, 48px touch targets, tonal chips.
- * All stock adjustments go through backend API.
- */
+
 import { useState } from 'react';
 import { updateProduct } from '../../../../services/storage';
 

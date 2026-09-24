@@ -1,9 +1,4 @@
-/**
- * API utility — centralized HTTP client for backend communication.
- *
- * All API calls go through this module. To swap from localStorage to
- * real backend, update the BASE_URL and remove localStorage fallbacks.
- */
+
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
@@ -22,7 +17,6 @@ async function request(endpoint, options = {}) {
     ...options.headers,
   };
 
-  // Add auth token if available
   const token = localStorage.getItem('technova_token');
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -38,13 +32,11 @@ async function request(endpoint, options = {}) {
     throw new ApiError(response.status, data);
   }
 
-  // Handle 204 No Content
   if (response.status === 204) return null;
 
   return response.json();
 }
 
-// HTTP methods
 export const api = {
   get: (endpoint, options) => request(endpoint, { method: 'GET', ...options }),
   post: (endpoint, body, options) => request(endpoint, { method: 'POST', body: JSON.stringify(body), ...options }),

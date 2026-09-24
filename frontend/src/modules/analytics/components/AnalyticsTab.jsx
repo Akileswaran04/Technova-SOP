@@ -1,16 +1,10 @@
-/**
- * AnalyticsTab — Business Analytics Dashboard for sellers.
- * Adapted from TECHNOVA Analytics Dashboard into the seller dashboard context.
- * Uses recharts for charts, material icons for UI.
- */
+
 import { useState, useMemo } from 'react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, PieChart, Pie, Cell
 } from 'recharts';
 import { generateId } from '../../../hooks/useLocalStorage';
-
-/* ── Mock Data ──────────────────────────────────────────── */
 
 const periodData = {
   'Last 7 days': [
@@ -61,8 +55,6 @@ const channels = [
 const sentimentColors = { Positive: '#32a66a', Neutral: '#f2b83f', Negative: '#e65353' };
 const channelColors = ['#326fe8', '#7a48d4', '#f2b83f', '#2ca6a0'];
 
-/* ── Sub-components ──────────────────────────────────────── */
-
 function KpiCard({ icon, label, value, change, note }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 hover:shadow-md transition-shadow">
@@ -91,8 +83,6 @@ function SentimentTooltip({ active, payload }) {
     </div>
   );
 }
-
-/* ── Main Component ──────────────────────────────────────── */
 
 export default function AnalyticsTab({ sellerId, onToast }) {
   const [period, setPeriod] = useState('Last 7 days');
@@ -124,7 +114,6 @@ export default function AnalyticsTab({ sellerId, onToast }) {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-on-surface font-bold">Business Analytics</h1>
@@ -137,7 +126,6 @@ export default function AnalyticsTab({ sellerId, onToast }) {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex flex-wrap items-center gap-3">
         <select
           value={period}
@@ -178,7 +166,6 @@ export default function AnalyticsTab({ sellerId, onToast }) {
         </div>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon="chat" label="Messages analyzed" value={kpis.messages.toLocaleString()} change="+18.4%" note={`vs previous ${period.toLowerCase()}`} />
         <KpiCard icon="schedule" label="Avg response time" value="15m 42s" change="-8.2%" note="faster than previous period" />
@@ -186,9 +173,7 @@ export default function AnalyticsTab({ sellerId, onToast }) {
         <KpiCard icon="shield" label="Average trust score" value={`${kpis.trust}/10`} change="+0.4" note="weighted trust index" />
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Line Chart — 2 cols */}
         <div className="lg:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl p-5">
           <h3 className="text-title-sm text-on-surface font-semibold">Communication Performance</h3>
           <p className="text-label-sm text-on-surface-variant mt-0.5">Message activity and engagement over {period.toLowerCase()}</p>
@@ -208,7 +193,6 @@ export default function AnalyticsTab({ sellerId, onToast }) {
           </div>
         </div>
 
-        {/* Channel Pie — 1 col */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-5">
           <h3 className="text-title-sm text-on-surface font-semibold">Channel Activity</h3>
           <p className="text-label-sm text-on-surface-variant mt-0.5">Messages by source</p>
@@ -235,7 +219,6 @@ export default function AnalyticsTab({ sellerId, onToast }) {
           </div>
         </div>
 
-        {/* Sentiment Pie — 1 col */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-5">
           <h3 className="text-title-sm text-on-surface font-semibold">Sentiment Distribution</h3>
           <p className="text-label-sm text-on-surface-variant mt-0.5">Analyzed communication tone</p>
@@ -263,7 +246,6 @@ export default function AnalyticsTab({ sellerId, onToast }) {
         </div>
       </div>
 
-      {/* Buyer Performance Table */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>

@@ -1,9 +1,3 @@
-"""
-Redis-backed rate limiting (spec §4 `ratelimit:*`).
-
-Fixed-window counter per scope+key (default: client IP). Fail-open when Redis
-is unavailable so an outage never locks users out; requests are logged instead.
-"""
 import logging
 from typing import Optional
 
@@ -31,11 +25,6 @@ async def _client_key(request: Request) -> str:
 
 
 def rate_limit(limit: int, window: int, scope: str):
-    """Dependency factory — allow `limit` requests per `window` seconds.
-
-    Usage:
-        @router.post("/login", dependencies=[Depends(rate_limit(20, 60, "auth"))])
-    """
     async def _check(request: Request) -> None:
         client = await _client_key(request)
         key = f"ratelimit:{scope}:{client}"

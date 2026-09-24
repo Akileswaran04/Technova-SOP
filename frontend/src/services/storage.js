@@ -1,16 +1,5 @@
-/**
- * Storage service — centralized API communication.
- *
- * Single identity, single login: role is chosen once at registration and
- * carried in the JWT. Sellers see the seller dashboard; buyers see the
- * buyer app (discover / chat / orders / profile).
- *
- * All data lives in the backend: PostgreSQL (identity, products, orders,
- * payments, analytics), MongoDB (conversations/messages), Redis (realtime).
- */
-import api from '../utils/api';
 
-// ── Session (JWT token stored in localStorage) ──
+import api from '../utils/api';
 
 export function getSession() {
   try {
@@ -40,8 +29,6 @@ export function clearSession() {
   localStorage.removeItem('technova_token');
 }
 
-// ── Auth (role picked once, at registration) ──
-
 export async function registerUser(data) {
   const result = await api.post('/auth/register', data);
   return setSession(result);
@@ -52,18 +39,16 @@ export async function loginUser(identifier, password) {
   return setSession(result);
 }
 
-// Aliases kept for existing screens
 export const registerSeller = registerUser;
 export const loginSeller = loginUser;
 
-// One-click temporary login with a seeded demo account (seller1/seller2/buyer1/buyer2/admin)
 export async function demoLogin(demoKey) {
   const result = await api.post('/auth/demo-login', { demo: demoKey });
   return setSession(result);
 }
 
 export async function logoutUser() {
-  try { await api.post('/auth/logout'); } catch { /* stateless JWT */ }
+  try { await api.post('/auth/logout'); } catch {}
   clearSession();
 }
 
@@ -71,7 +56,14 @@ export async function getCurrentUser() {
   return await api.get('/auth/me');
 }
 
-// ── Seller profile ──
+export async function getMyLanguage() {
+  try {
+    const data = await getCurrentUser();
+    return data?.user?.preferred_language || 'en';
+  } catch {
+    return 'en';
+  }
+}
 
 export async function getSellerById() {
   const data = await getCurrentUser();
@@ -95,8 +87,6 @@ export async function updateSeller(id, updates) {
   return await api.put('/sellers/profile', payload);
 }
 
-// ── Buyer profile ──
-
 export async function getBuyerById() {
   const data = await getCurrentUser();
   return data?.buyer || null;
@@ -110,12 +100,8 @@ export async function updateBuyer(id, updates) {
   return await api.put('/buyers/me', payload);
 }
 
-// ── Products (seller CRUD) ──
-
 export async function getProductsBySeller(onPage) {
-  // The backend returns products paginated (offset-based). Fetch page by page
-  // so a large catalog never arrives in one giant response — the first page
-  // resolves quickly and remaining pages stream in via the onPage callback.
+
   const PAGE = 100;
   try {
     const all = [];
@@ -192,8 +178,6 @@ export async function deleteProduct(id) {
   return await api.delete(`/products/${id}`);
 }
 
-// ── Discovery (buyer-facing search) ──
-
 export async function discover(params = {}) {
   const qs = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -212,8 +196,6 @@ export async function getSellerPublicProducts(sellerId, cursor) {
   return await api.get(`/sellers/${sellerId}/products${qs}`);
 }
 
-// ── Customers (seller-side buyer discovery, unchanged API) ──
-
 export async function getCustomersBySeller() {
   try { return await api.get('/customers'); } catch { return []; }
 }
@@ -230,8 +212,6 @@ export async function updateCustomer(id, updates) {
   if (updates.name !== undefined) payload.name = updates.name;
   return await api.put(`/customers/${id}`, payload);
 }
-
-// ── Conversations / Chat (MongoDB-backed) ──
 
 export async function getConversations() {
   try {
@@ -252,8 +232,7 @@ export async function getConversations() {
 }
 
 export async function getConversationById(id) {
-  // Fetch conversation summary and message page in parallel (2 sequential
-  // round-trips made opening a chat noticeably slow)
+
   const [c, page] = await Promise.all([
     api.get(`/conversations/${id}`),
     api.get(`/conversations/${id}/messages?limit=200`),
@@ -275,6 +254,8 @@ export async function getConversationById(id) {
       timestamp: m.created_at,
       isAI: m.is_ai_generated,
       sentiment: m.sentiment,
+      translatedText: m.translated_content,
+      translatedLanguage: m.translated_language,
     })),
   };
 }
@@ -294,8 +275,6 @@ export async function sendMessage(conversationId, message) {
 export async function markAsRead(conversationId) {
   return await api.patch(`/conversations/${conversationId}/read`);
 }
-
-// ── Human approval: AI drafts (seller reviews before send) ──
 
 export async function listConversationDrafts(conversationId) {
   try {
@@ -326,8 +305,6 @@ export async function analyzeText(content) {
   return await api.post('/ai/analyze', { content });
 }
 
-// ── Orders ──
-
 export async function createOrder(items, extra = {}) {
   return await api.post('/orders', {
     items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
@@ -351,8 +328,17 @@ export async function getOrder(id) {
   return o ? mapOrder(o) : null;
 }
 
-export async function updateOrderStatus(id, status) {
-  return await api.patch(`/orders/${id}/status`, { status });
+export async function updateOrderStatus(id, status, extra = {}) {
+  return await api.patch(`/orders/${id}/status`, { status, location: extra.location, notes: extra.notes });
+}
+
+export async function getOrderTracking(id) {
+  try {
+    const events = await api.get(`/orders/${id}/tracking`);
+    return Array.isArray(events) ? events : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function reviewOrder(orderId, rating, comment, title) {
@@ -381,13 +367,193 @@ function mapOrder(o) {
   };
 }
 
-// ── Payments / Transactions ──
+function mapCart(c) {
+  return {
+    id: c.id,
+    subtotal: c.subtotal,
+    itemCount: c.item_count,
+    items: (c.items || []).map((i) => ({
+      id: i.id,
+      productId: i.product_id,
+      productName: i.product_name,
+      productImageUrl: i.product_image_url,
+      unitPrice: i.unit_price,
+      sellerId: i.seller_id,
+      availableStock: i.available_stock,
+      quantity: i.quantity,
+      lineTotal: i.line_total,
+    })),
+  };
+}
+
+export async function getCart() {
+  try {
+    return mapCart(await api.get('/cart'));
+  } catch {
+    return { id: null, subtotal: 0, itemCount: 0, items: [] };
+  }
+}
+
+export async function addToCart(productId, quantity = 1) {
+  return mapCart(await api.post('/cart/items', { product_id: productId, quantity }));
+}
+
+export async function updateCartItem(itemId, quantity) {
+  return mapCart(await api.patch(`/cart/items/${itemId}`, { quantity }));
+}
+
+export async function removeCartItem(itemId) {
+  return mapCart(await api.delete(`/cart/items/${itemId}`));
+}
+
+export async function checkoutCart(addressId, extra = {}) {
+  const orders = await api.post('/cart/checkout', {
+    address_id: addressId,
+    payment_method: extra.paymentMethod || 'mock',
+    notes: extra.notes,
+  });
+  return (orders || []).map(mapOrder);
+}
+
+function mapAddress(a) {
+  return {
+    id: a.id,
+    label: a.label,
+    line1: a.line1,
+    line2: a.line2,
+    city: a.city,
+    state: a.state,
+    postalCode: a.postal_code,
+    country: a.country,
+    isDefault: a.is_default,
+  };
+}
+
+export async function getAddresses() {
+  try {
+    const data = await api.get('/buyers/me/addresses');
+    return (Array.isArray(data) ? data : []).map(mapAddress);
+  } catch {
+    return [];
+  }
+}
+
+export async function createAddress(address) {
+  return mapAddress(await api.post('/buyers/me/addresses', {
+    label: address.label || 'Home',
+    line1: address.line1,
+    line2: address.line2 || null,
+    city: address.city,
+    state: address.state || null,
+    postal_code: address.postalCode || null,
+    country: address.country || 'India',
+    is_default: !!address.isDefault,
+  }));
+}
+
+export async function deleteAddress(id) {
+  return await api.delete(`/buyers/me/addresses/${id}`);
+}
+
+export async function understandRequirement(text) {
+  return await api.post('/assistant/understand', { text });
+}
+
+export async function understandVoice(text, sourceLanguage) {
+  return await api.post('/assistant/voice', { text, source_language: sourceLanguage || 'en' });
+}
+
+export async function updatePreferredLanguage(language) {
+  return await api.patch('/auth/me/language', { preferred_language: language });
+}
+
+export async function getRecommendations({ category, budget, q, location } = {}) {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (budget) params.set('budget', budget);
+  if (q) params.set('q', q);
+  if (location) params.set('location', location);
+  const qs = params.toString();
+  try {
+    const data = await api.get(`/recommendation${qs ? `?${qs}` : ''}`);
+    return data?.items || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function compareProducts(productIds) {
+  return await api.post('/recommendation/compare', { product_ids: productIds });
+}
+
+export async function getNegotiationSuggestion(productId, quantity = 1) {
+  try {
+    return await api.get(`/negotiation/products/${productId}/suggestion?quantity=${quantity}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getNegotiationRule(productId) {
+  try {
+    return await api.get(`/negotiation/products/${productId}/rule`);
+  } catch {
+    return null;
+  }
+}
+
+export async function setNegotiationRule(productId, rule) {
+  return await api.put(`/negotiation/products/${productId}/rule`, {
+    enabled: rule.enabled,
+    min_price: rule.minPrice,
+    auto_accept_threshold: rule.autoAcceptThreshold ?? null,
+    counter_offer_range_pct: rule.counterOfferRangePct ?? 10,
+    max_rounds: rule.maxRounds ?? 2,
+  });
+}
+
+export async function createNegotiationOffer(productId, quantity, offeredPrice, message) {
+  return await api.post('/negotiation/offers', {
+    product_id: productId, quantity, offered_price: offeredPrice, message: message || null,
+  });
+}
+
+export async function respondToOffer(offerId, action, extra = {}) {
+  return await api.post(`/negotiation/offers/${offerId}/respond`, {
+    action, counter_price: extra.counterPrice ?? null, message: extra.message || null,
+  });
+}
+
+export async function getNegotiationThread(productId) {
+  try {
+    const data = await api.get(`/negotiation/products/${productId}/thread`);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listMyOffers(status) {
+  try {
+    const qs = status ? `?status=${status}` : '';
+    const data = await api.get(`/negotiation/offers${qs}`);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function checkoutOffer(offerId, addressId, extra = {}) {
+  return mapOrder(await api.post(`/negotiation/offers/${offerId}/checkout`, {
+    address_id: addressId,
+    payment_method: extra.paymentMethod || 'mock',
+    notes: extra.notes,
+  }));
+}
 
 export async function getPaymentForOrder(orderId) {
   return await api.get(`/payments/orders/${orderId}`);
 }
-
-// ── Analytics ──
 
 export async function getSellerAnalytics(sellerId, force = false) {
   try {
@@ -401,14 +567,8 @@ export async function getTrustScore(sellerId) {
   try { return await api.get(`/analytics/${sellerId}/trust-score`); } catch { return null; }
 }
 
-// ── Derived helpers (pure functions over an already-fetched product list) ──
-// These used to fetch the full product catalog themselves, so opening a tab
-// that used them re-downloaded every product (and its reviews) N times.
-// Callers that already have products (App state) now pass them in directly.
-
 export async function getTotalUnread() {
-  // Lightweight aggregate endpoint — the old version fetched and mapped the
-  // entire conversation list just to sum unread counts
+
   try {
     const data = await api.get('/conversations/unread/total');
     return data?.total || 0;
@@ -437,8 +597,6 @@ export function computeTrustScore(products) {
 export function getReviewCount(products) {
   return products.reduce((sum, p) => sum + (p.reviews?.length || 0), 0);
 }
-
-// ── Derived: Customer list from reviews ──
 
 export function getDerivedCustomers(products) {
   const customerMap = {};

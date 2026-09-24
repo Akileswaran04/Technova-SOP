@@ -1,8 +1,3 @@
-"""
-Order models — orders, order_items and reviews (PostgreSQL source of truth).
-
-Matches tables created in alembic migration 001_initial_schema.
-"""
 from datetime import datetime
 
 from sqlalchemy import Column, String, Text, Integer, Float, Boolean, DateTime, ForeignKey, CheckConstraint, Index
@@ -16,11 +11,15 @@ def _pg_enum(name, values):
     return PG_ENUM(*values, name=name, create_type=False)
 
 
-orderstatus_enum = _pg_enum("orderstatus", ["pending", "confirmed", "shipped", "delivered", "cancelled", "returned"])
+orderstatus_enum = _pg_enum("orderstatus", [
+    "pending", "confirmed", "shipped", "delivered", "cancelled", "returned",
+    "created", "payment_pending", "paid", "seller_confirmed", "processing",
+    "packed", "ready_for_pickup", "picked_up", "in_transit",
+    "out_for_delivery", "return_requested", "refunded", "delivery_failed",
+])
 
 
 class Order(Base):
-    """Order between a buyer and a seller."""
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -37,14 +36,12 @@ class Order(Base):
     created_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
 
-    # Relationships
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     buyer = relationship("BuyerProfile", foreign_keys=[buyer_id])
     seller = relationship("SellerProfile", foreign_keys=[seller_id])
 
 
 class OrderItem(Base):
-    """Line item within an order."""
     __tablename__ = "order_items"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -59,13 +56,11 @@ class OrderItem(Base):
         CheckConstraint("quantity > 0", name="ck_order_item_quantity_positive"),
     )
 
-    # Relationships
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
 
 
 class Review(Base):
-    """Buyer review of a product/seller, tied to an order."""
     __tablename__ = "reviews"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -85,3 +80,18 @@ class Review(Base):
     __table_args__ = (
         CheckConstraint("rating >= 1 AND rating <= 5", name="ck_review_rating_range"),
     )
+
+
+class TrackingEvent(Base):
+    __tablename__ = "tracking_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(30), nullable=False)
+    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_role = Column(String(20), nullable=True)
+    location = Column(String(255), nullable=True)
+    notes = Column(String(500), nullable=True)
+    created_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
+
+    order = relationship("Order")

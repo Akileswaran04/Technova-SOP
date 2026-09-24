@@ -1,8 +1,4 @@
-/**
- * AI Auto-Reply Engine — helper functions for NeuroChat.
- * This layer is intentionally small and deterministic so it can be unit-tested
- * while the real sentiment/draft generation happens through the backend APIs.
- */
+
 
 export function normalizeNeuroChatConversation(conversation, draftList = []) {
   const customerName = conversation?.customerName || conversation?.name || 'Customer';
@@ -22,8 +18,6 @@ export function normalizeNeuroChatConversation(conversation, draftList = []) {
   };
 }
 
-/* ── Emotion Detection ─────────────────────────────────── */
-
 const emotionKeywords = {
   Excited: ['amazing', 'love', 'great', 'awesome', 'fantastic', 'excited', 'perfect', 'wow', 'excellent', 'superb', 'brilliant', 'wonderful'],
   Interested: ['interested', 'tell me more', 'curious', 'how', 'what', 'feature', 'details', 'info', 'learn', 'explain', 'considering'],
@@ -40,8 +34,6 @@ export function detectEmotion(message) {
   return 'Neutral';
 }
 
-/* ── Strategy Prediction ───────────────────────────────── */
-
 const strategyMap = {
   Excited: 'Urgency CTA',
   Interested: 'Educational',
@@ -53,8 +45,6 @@ const strategyMap = {
 export function predictStrategy(emotion) {
   return strategyMap[emotion] || 'Educational';
 }
-
-/* ── Lead Scoring ──────────────────────────────────────── */
 
 export function calculateLeadScore(message, emotion, strategy) {
   let score = 0;
@@ -73,8 +63,6 @@ export function calculateLeadScore(message, emotion, strategy) {
 
   return Math.min(score, 100);
 }
-
-/* ── Response Templates ────────────────────────────────── */
 
 const responseTemplates = {
   Excited: [
@@ -108,8 +96,6 @@ export function generateAIResponse(message, emotion, strategy) {
   const templates = responseTemplates[emotion] || responseTemplates.Neutral;
   return templates[Math.floor(Math.random() * templates.length)];
 }
-
-/* ── Full Analysis Pipeline ────────────────────────────── */
 
 export function analyzeMessage(message) {
   const emotion = detectEmotion(message);

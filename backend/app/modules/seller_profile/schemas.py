@@ -1,6 +1,3 @@
-"""
-Pydantic schemas for seller_profile module.
-"""
 
 from datetime import datetime
 from typing import Optional, List
@@ -15,10 +12,7 @@ from app.shared.constants import (
 )
 
 
-# ── Request Schemas ──
-
 class SellerProfileCreate(BaseModel):
-    """Create a new seller profile."""
     business_name: str = Field(..., min_length=1, max_length=MAX_BUSINESS_NAME_LENGTH)
     business_type: str = Field(..., min_length=1)
     description: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH)
@@ -35,7 +29,6 @@ class SellerProfileCreate(BaseModel):
 
 
 class SellerProfileUpdate(BaseModel):
-    """Update an existing seller profile."""
     business_name: Optional[str] = Field(None, min_length=1, max_length=MAX_BUSINESS_NAME_LENGTH)
     business_type: Optional[str] = None
     description: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH)
@@ -51,10 +44,7 @@ class SellerProfileUpdate(BaseModel):
     license_number: Optional[str] = Field(None, max_length=MAX_LICENSE_LENGTH)
 
 
-# ── Response Schemas ──
-
 class SellerProfileResponse(BaseModel):
-    """Seller profile response."""
     id: int
     user_id: int
     business_name: str
@@ -79,7 +69,6 @@ class SellerProfileResponse(BaseModel):
 
 
 class SellerVerificationResponse(BaseModel):
-    """Verification record response."""
     id: int
     seller_id: int
     verification_type: str
@@ -95,7 +84,6 @@ class SellerVerificationResponse(BaseModel):
 
 
 class StatusUpdateRequest(BaseModel):
-    """Request to update verification status."""
     status: SellerProfileStatus
     rejection_reason: Optional[str] = None
 
@@ -108,6 +96,5 @@ class StatusUpdateRequest(BaseModel):
 
 
 class ProfileSubmitResponse(BaseModel):
-    """Response after submitting profile for review."""
     profile: SellerProfileResponse
     message: str = "Profile submitted for verification"

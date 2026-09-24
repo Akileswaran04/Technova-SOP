@@ -1,4 +1,3 @@
-"""Pydantic schemas for buyer profile module."""
 from datetime import datetime
 from typing import Optional
 
@@ -7,7 +6,6 @@ from pydantic import BaseModel, Field
 
 
 class BuyerProfileUpdate(BaseModel):
-    """Update buyer profile fields."""
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     phone: Optional[str] = None
@@ -22,7 +20,6 @@ class BuyerProfileUpdate(BaseModel):
 
 
 class BuyerProfileResponse(BaseModel):
-    """Buyer profile response."""
     id: int
     user_id: int
     first_name: str
@@ -38,6 +35,45 @@ class BuyerProfileResponse(BaseModel):
     tax_id: Optional[str]
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AddressCreate(BaseModel):
+    label: str = Field("Home", max_length=100)
+    line1: str = Field(..., min_length=1, max_length=255)
+    line2: Optional[str] = Field(None, max_length=255)
+    city: str = Field(..., min_length=1, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
+    country: str = Field("India", max_length=100)
+    is_default: bool = False
+
+
+class AddressUpdate(BaseModel):
+    label: Optional[str] = Field(None, max_length=100)
+    line1: Optional[str] = Field(None, min_length=1, max_length=255)
+    line2: Optional[str] = Field(None, max_length=255)
+    city: Optional[str] = Field(None, min_length=1, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
+    country: Optional[str] = Field(None, max_length=100)
+    is_default: Optional[bool] = None
+
+
+class AddressResponse(BaseModel):
+    id: int
+    buyer_id: int
+    label: str
+    line1: str
+    line2: Optional[str]
+    city: str
+    state: Optional[str]
+    postal_code: Optional[str]
+    country: str
+    is_default: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True
