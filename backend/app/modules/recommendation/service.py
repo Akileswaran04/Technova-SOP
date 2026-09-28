@@ -12,9 +12,13 @@ from app.core.ai import chat
 from app.core.exceptions import ValidationException
 
 
+def _in_budget(c: dict, budget: Optional[float]) -> bool:
+    return bool(budget) and c["price"] <= budget
+
+
 def _reasons_best_fit(c: dict, budget: Optional[float]) -> list[str]:
     reasons = []
-    if budget:
+    if _in_budget(c, budget):
         reasons.append("Within your budget")
     if c.get("trust_score") and c["trust_score"] >= 70:
         reasons.append(f"Reliable seller (trust score {round(c['trust_score'])})")
@@ -24,16 +28,18 @@ def _reasons_best_fit(c: dict, budget: Optional[float]) -> list[str]:
 
 def _reasons_value(c: dict, budget: Optional[float]) -> list[str]:
     reasons = ["Lower price than similar options"]
-    if budget:
+    if _in_budget(c, budget):
         reasons.append("Within your budget")
     reasons.append("In stock and ready to ship")
     return reasons
 
 
-def _reasons_delivery(c: dict) -> list[str]:
+def _reasons_trusted(c: dict) -> list[str]:
     reasons = []
     if c.get("seller_verification_status") == "verified":
-        reasons.append("From a verified seller — faster order confirmation")
+        reasons.append("Verified seller")
+    if c.get("trust_score") and c["trust_score"] >= 70:
+        reasons.append(f"Trust score {round(c['trust_score'])}")
     reasons.append("In stock and ready to ship")
     return reasons
 
@@ -67,8 +73,10 @@ class RecommendationService:
         budget: Optional[float] = None,
         q: Optional[str] = None,
         location: Optional[str] = None,
+        priority: Optional[str] = None,
     ) -> list[dict]:
-        """2-3 relevant, reasoned picks — never a full list (PRD §9)."""
+        """2-3 relevant, reasoned picks — never a full list (PRD §9). A
+        stated priority of "price" leads with the Better Value pick."""
         result = await self.discovery.search_products(
             category=category, location=location, budget=budget, q=q, limit=20, offset=0,
         )
@@ -94,14 +102,19 @@ class RecommendationService:
             picks.append((better_value, "Better Value", _reasons_value(better_value, budget)))
             used_ids.add(better_value["id"])
 
+        # No delivery-time data exists yet, so the third slot is a trust pick
+        # rather than a "Faster Delivery" claim the data can't back up.
         remaining = [c for c in candidates if c["id"] not in used_ids]
         if remaining:
-            faster = next(
-                (c for c in remaining if c.get("seller_verification_status") == "verified"),
-                remaining[0],
+            trusted = max(
+                remaining,
+                key=lambda c: (c.get("seller_verification_status") == "verified", c.get("trust_score") or 0),
             )
-            picks.append((faster, "Faster Delivery", _reasons_delivery(faster)))
-            used_ids.add(faster["id"])
+            picks.append((trusted, "Trusted Seller", _reasons_trusted(trusted)))
+            used_ids.add(trusted["id"])
+
+        if priority == "price" and len(picks) > 1:
+            picks.insert(0, picks.pop(1))
 
         return [_to_item(c, tag, reasons) for c, tag, reasons in picks[:3]]
 
@@ -146,7 +159,8 @@ class RecommendationService:
         )
         summary = await chat(
             "You compare products for a shopper in 1-3 short sentences. Be concrete "
-            "(mention price and trust differences), plain language, no markdown.",
+            "(mention price and trust differences), plain language, no markdown. "
+            "Only use the facts given; never invent features, delivery times or specs.",
             f"Compare these options:\n{lines}",
             temperature=0.5, max_tokens=150,
         )

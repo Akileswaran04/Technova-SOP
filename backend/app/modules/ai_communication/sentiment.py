@@ -51,10 +51,13 @@ async def _generate_llm_draft(message: str, intent: str, label: str) -> Optional
         f"Customer sentiment label: {label}\nDetected intent: {intent}\n\nCustomer message:\n{message}",
         temperature=0.7,
         max_tokens=200,
+        fast=True,
     )
 
 
-async def analyze_message(content: str) -> dict:
+async def analyze_message(content: str, *, llm_draft: bool = False) -> dict:
+    """Keyword sentiment/intent for every message; the LLM reply draft is
+    opt-in (seller asked for one) so plain message traffic costs no AI call."""
     text = content.strip()
     lowered = text.lower()
 
@@ -101,7 +104,7 @@ async def analyze_message(content: str) -> dict:
         "general": "respond",
     }[intent]
 
-    draft = await _generate_llm_draft(text, intent, label) or draft_reply(intent, label)
+    draft = (await _generate_llm_draft(text, intent, label) if llm_draft else None) or draft_reply(intent, label)
 
     return {
         "label": label,

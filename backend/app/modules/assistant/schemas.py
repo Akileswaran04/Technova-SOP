@@ -14,8 +14,11 @@ class UnderstandRequest(BaseModel):
 class RequirementExtraction(BaseModel):
     category: Optional[str] = None
     color: Optional[str] = None
+    size: Optional[str] = None
     budget: Optional[float] = None
     use_case: Optional[str] = None
+    priority: Optional[str] = None
+    language: Optional[str] = None
 
 
 class UnderstandResponse(BaseModel):

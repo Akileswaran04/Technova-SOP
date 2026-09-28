@@ -33,7 +33,11 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
     GROQ_API_KEY: Optional[str] = None
+    # "smart" tier: understanding buyer requirements (any language incl.
+    # Tamil/Tanglish), translation, comparisons. "fast" tier: high-volume,
+    # low-stakes text such as seller reply drafts.
     GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_MODEL_FAST: str = "openai/gpt-oss-20b"
 
     GMAIL_CLIENT_ID: Optional[str] = None
     GMAIL_CLIENT_SECRET: Optional[str] = None

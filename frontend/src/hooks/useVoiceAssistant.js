@@ -19,6 +19,9 @@ export function isVoiceSupported() {
 const LANG_CODES = {
   english: 'en-US', en: 'en-US',
   tamil: 'ta-IN', ta: 'ta-IN',
+  // Tanglish is Tamil typed in Latin letters — an Indian-English voice reads it
+  // naturally, a Tamil-script voice does not.
+  tanglish: 'en-IN',
   hindi: 'hi-IN', hi: 'hi-IN',
   telugu: 'te-IN', te: 'te-IN',
   kannada: 'kn-IN', kn: 'kn-IN',

@@ -14,7 +14,7 @@ const QUICK_CATEGORIES = ['Footwear', 'Clothing', 'Electronics', 'Home Decor', '
 const TAG_STYLES = {
   'Best Fit': { bg: 'bg-primary-container/40', text: 'text-primary', label: 'Best Fit' },
   'Better Value': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Better Value' },
-  'Faster Delivery': { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Faster Delivery' },
+  'Trusted Seller': { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Trusted Seller' },
 };
 
 export default function HomePage({ onOpenProduct, onGoToCatalogue }) {
@@ -147,7 +147,8 @@ export default function HomePage({ onOpenProduct, onGoToCatalogue }) {
         <div className="space-y-4">
           <div className="max-w-xl mx-auto text-center">
             <p className="text-label-md text-on-surface-variant">
-              Got it{result.extraction?.category ? ` — looking for ${result.extraction.category}` : ''}
+              Got it — looking for {[result.extraction?.color, result.extraction?.category].filter(Boolean).join(' ')}
+              {result.extraction?.size ? `, size ${result.extraction.size}` : ''}
               {result.extraction?.budget ? ` under $${result.extraction.budget.toLocaleString()}` : ''}.
             </p>
           </div>
