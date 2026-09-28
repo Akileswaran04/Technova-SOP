@@ -80,6 +80,7 @@ def _get_groq_client():
 
 
 async def _generate_llm_draft(message: str, intent: str, label: str) -> Optional[str]:
+<<<<<<< HEAD
     client = _get_groq_client()
     if client is None:
         return None
@@ -110,6 +111,20 @@ async def _generate_llm_draft(message: str, intent: str, label: str) -> Optional
 
 async def analyze_message(content: str) -> dict:
     """Analyze a message and produce sentiment/intent/lead-score + draft."""
+=======
+    return await chat(
+        _DRAFT_SYSTEM_PROMPT,
+        f"Customer sentiment label: {label}\nDetected intent: {intent}\n\nCustomer message:\n{message}",
+        temperature=0.7,
+        max_tokens=200,
+        fast=True,
+    )
+
+
+async def analyze_message(content: str, *, llm_draft: bool = False) -> dict:
+    """Keyword sentiment/intent for every message; the LLM reply draft is
+    opt-in (seller asked for one) so plain message traffic costs no AI call."""
+>>>>>>> 0b9e71e (Improve AI model usage: tiers, multilingual extraction, honest reasons)
     text = content.strip()
     lowered = text.lower()
 
@@ -159,7 +174,7 @@ async def analyze_message(content: str) -> dict:
         "general": "respond",
     }[intent]
 
-    draft = await _generate_llm_draft(text, intent, label) or draft_reply(intent, label)
+    draft = (await _generate_llm_draft(text, intent, label) if llm_draft else None) or draft_reply(intent, label)
 
     return {
         "label": label,

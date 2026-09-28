@@ -18,8 +18,12 @@ router = APIRouter()
 
 @router.post("/analyze", response_model=SentimentResponse)
 async def analyze(data: SentimentRequest):
+<<<<<<< HEAD
     """Run sentiment/intent analysis on a message (in-app or synced email alike)."""
     return await analyze_message(data.content)
+=======
+    return await analyze_message(data.content, llm_draft=True)
+>>>>>>> 0b9e71e (Improve AI model usage: tiers, multilingual extraction, honest reasons)
 
 
 @router.get("/interactions", response_model=List[AIInteractionResponse])

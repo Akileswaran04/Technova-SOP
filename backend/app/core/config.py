@@ -48,7 +48,11 @@ class Settings(BaseSettings):
 
     # External AI providers
     GROQ_API_KEY: Optional[str] = None
+    # "smart" tier: understanding buyer requirements (any language incl.
+    # Tamil/Tanglish), translation, comparisons. "fast" tier: high-volume,
+    # low-stakes text such as seller reply drafts.
     GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_MODEL_FAST: str = "openai/gpt-oss-20b"
 
     # External integrations — Gmail / Microsoft Graph OAuth (empty = mock mode)
     GMAIL_CLIENT_ID: Optional[str] = None
